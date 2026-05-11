@@ -31,32 +31,27 @@ const playAlertTone = () => {
 };
 
 export function ClientTurnoContent({ initialToken }: { initialToken: string }) {
-  const [token, setToken] = useState<string | null>(initialToken || null);
   const [turn, setTurn] = useState<TurnData | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const previousStatus = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!token) {
+    if (!initialToken) {
       setErrorMessage('No se encontró el token en la URL.');
       setLoading(false);
       return;
     }
-  }, [token]);
-
-  useEffect(() => {
-    if (!token) return;
 
     const fetchTurn = async () => {
       setLoading(true);
       const { data, error } = await supabase
         .from('turns')
-        .select('id, customer_name, turn_number, status, estimated_wait_minutes, created_at')
-        .eq('token', token)
+        .select('*')
+        .eq('token', initialToken)
         .single();
 
-      if (error) {
+      if (error || !data) {
         setErrorMessage('No se encontró el turno. El token es inválido o expiró.');
         setTurn(null);
         setLoading(false);
@@ -71,10 +66,10 @@ export function ClientTurnoContent({ initialToken }: { initialToken: string }) {
     fetchTurn();
 
     const channel = supabase
-      .channel(`turno-${token}`)
+      .channel(`turno-${initialToken}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'turns', filter: `token=eq.${token}` },
+        { event: '*', schema: 'public', table: 'turns', filter: `token=eq.${initialToken}` },
         () => {
           fetchTurn();
         }
@@ -84,7 +79,7 @@ export function ClientTurnoContent({ initialToken }: { initialToken: string }) {
     return () => {
       channel.unsubscribe();
     };
-  }, [token]);
+  }, [initialToken]);
 
   useEffect(() => {
     if (!turn) return;
