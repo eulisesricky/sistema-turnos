@@ -20,6 +20,7 @@ export default function CajeroPage() {
   const [customerName, setCustomerName] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [loading, setLoading] = useState(false);
+  const [successUrl, setSuccessUrl] = useState<string | null>(null);
 
   const fetchTurns = async () => {
     const { data, error } = await supabase
@@ -54,6 +55,7 @@ export default function CajeroPage() {
     event.preventDefault();
     if (!customerName.trim()) return;
 
+    setSuccessUrl(null);
     setLoading(true);
 
     const { data: latestTurn, error: latestError } = await supabase
@@ -91,6 +93,7 @@ export default function CajeroPage() {
       return;
     }
 
+    setSuccessUrl(`https://sistema-turnos-nine.vercel.app/turno?token=${token}`);
     setCustomerName('');
     setWhatsapp('');
     setLoading(false);
@@ -158,6 +161,15 @@ export default function CajeroPage() {
               {loading ? 'Registrando...' : 'Registrar turno'}
             </button>
           </form>
+          {successUrl && (
+            <div className="mt-4 rounded-2xl bg-emerald-50 border border-emerald-200 p-4">
+              <p className="text-sm font-medium text-emerald-800">Turno registrado exitosamente</p>
+              <p className="text-sm text-emerald-700 mt-1">Comparte esta URL con el cliente:</p>
+              <a href={successUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-emerald-600 underline break-all">
+                {successUrl}
+              </a>
+            </div>
+          )}
         </section>
 
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">

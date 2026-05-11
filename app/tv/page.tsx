@@ -263,7 +263,7 @@ const renderQR = (matrix: number[][]) => {
 export default function TVPage() {
   const [currentTurn, setCurrentTurn] = useState<Turn | null>(null);
   const [nextTurns, setNextTurns] = useState<Turn[]>([]);
-  const [qrUrl, setQrUrl] = useState('/turno');
+  const [qrUrl, setQrUrl] = useState('https://sistema-turnos-nine.vercel.app/cajero');
 
   const fetchTurns = async () => {
     const { data, error } = await supabase
@@ -285,7 +285,7 @@ export default function TVPage() {
   };
 
   useEffect(() => {
-    setQrUrl(`${window.location.origin}/turno`);
+    setQrUrl('https://sistema-turnos-nine.vercel.app/cajero');
     fetchTurns()
   
     const channel = supabase
