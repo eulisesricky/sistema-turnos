@@ -16,7 +16,7 @@ interface Turn {
 interface Product {
   id: string;
   name: string;
-  minutes: number;
+  estimated_minutes: number;
 }
 
 const DEFAULT_QUEUE_ID = process.env.NEXT_PUBLIC_QUEUE_ID || 'default-queue-id';
@@ -56,7 +56,7 @@ export default function CajeroPage() {
   );
 
   const estimatedMinutes = useMemo(
-    () => selectedItems.reduce((total, product) => total + product.minutes, 0),
+    () => selectedItems.reduce((total, product) => total + product.estimated_minutes, 0),
     [selectedItems]
   );
 
@@ -84,7 +84,7 @@ export default function CajeroPage() {
   const fetchProducts = async () => {
     const { data, error } = await supabase
       .from('products')
-      .select('id, name, minutes')
+      .select('id, name, estimated_minutes')
       .eq('business_id', DEFAULT_BUSINESS_ID)
       .order('name', { ascending: true });
 
@@ -141,14 +141,14 @@ export default function CajeroPage() {
     const { error } = await supabase.from('products').insert([
       {
         name: newProductName.trim(),
-        minutes,
+        estimated_minutes: minutes,
         business_id: DEFAULT_BUSINESS_ID,
       },
     ]);
 
     if (error) {
-      console.error(error.message);
-      setErrorMessage('Error al agregar producto.');
+      console.log('Error al insertar producto:', error);
+      setErrorMessage(`Error al agregar producto: ${error.message}`);
       return;
     }
 
@@ -313,7 +313,7 @@ export default function CajeroPage() {
                   >
                     <div>
                       <p className="text-sm font-semibold text-slate-900">{product.name}</p>
-                      <p className="text-xs text-slate-500">{product.minutes} min</p>
+                      <p className="text-xs text-slate-500">{product.estimated_minutes} min</p>
                     </div>
                     <button
                       type="button"
@@ -376,7 +376,7 @@ export default function CajeroPage() {
                         className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                       />
                       <span className="text-sm text-slate-700">
-                        {product.name} ({product.minutes} min)
+                        {product.name} ({product.estimated_minutes} min)
                       </span>
                     </label>
                   ))}
