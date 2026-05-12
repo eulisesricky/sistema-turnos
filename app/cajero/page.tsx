@@ -386,7 +386,7 @@ export default function CajeroPage() {
             )}
           </section>
 
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="text-2xl font-semibold mb-4">Turnos activos</h2>
           <div className="space-y-3">
             {turns.length === 0 ? (
@@ -439,6 +439,82 @@ export default function CajeroPage() {
         </section>
       </div>
     </div>
-  </div>
-  );
+
+      {isProductPanelOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-end bg-black/40 px-4 py-6 sm:items-center sm:justify-center">
+          <div className="w-full max-w-md rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold">Gestionar productos</h2>
+                <p className="text-sm text-slate-500">Agrega, elimina y revisa tus productos.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsProductPanelOpen(false)}
+                className="rounded-full bg-slate-100 p-2 text-slate-700 transition hover:bg-slate-200"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-6 space-y-6">
+              <div className="space-y-3 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-700">Agregar producto</p>
+                <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                  <input
+                    value={newProductName}
+                    onChange={(event) => setNewProductName(event.target.value)}
+                    className="rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-emerald-500"
+                    placeholder="Nombre del producto"
+                  />
+                  <input
+                    value={newProductMinutes}
+                    onChange={(event) => setNewProductMinutes(event.target.value)}
+                    className="rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-emerald-500"
+                    placeholder="Min"
+                    type="number"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddProduct}
+                    className="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
+                  >
+                    Agregar
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {products.length === 0 ? (
+                  <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-slate-500">
+                    No hay productos registrados.
+                  </div>
+                ) : (
+                  products.map((product) => (
+                    <div
+                      key={product.id}
+                      className="flex items-center justify-between rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{product.name}</p>
+                        <p className="text-xs text-slate-500">{product.estimated_minutes} min</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteProduct(product.id)}
+                        className="rounded-2xl bg-rose-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-rose-500"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
+

@@ -29,12 +29,13 @@ export default function RegistroPage() {
 
     const { data, error: queryError } = await supabase
       .from('turns')
-      .select('token')
+      .select('*')
       .eq('business_id', DEFAULT_BUSINESS_ID)
       .eq('whatsapp', whatsapp.trim())
       .in('status', ['waiting', 'called'])
       .order('created_at', { ascending: false })
       .limit(1)
+      .single()
 
     if (queryError) {
       console.error(queryError)
@@ -43,7 +44,7 @@ export default function RegistroPage() {
       return
     }
 
-    const existingTurn = Array.isArray(data) ? data[0] : null
+    const existingTurn = data && typeof data === 'object' ? data : null
 
     if (existingTurn && existingTurn.token) {
       router.push(`/turno?token=${existingTurn.token}`)
