@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 function TurnoContent() {
@@ -48,16 +48,6 @@ function TurnoContent() {
     return () => clearInterval(interval)
   }, [timeLeft])
 
-  const alertPlayed = useRef(false)
-
-  useEffect(() => {
-    if (timeLeft === 0 && !alertPlayed.current) {
-      alertPlayed.current = true
-      playAlert()
-      if (navigator.vibrate) navigator.vibrate([500,200,500,200,500])
-    }
-  }, [timeLeft])
-
   const mins = String(Math.floor(timeLeft / 60)).padStart(2, '0')
   const secs = String(Math.floor(timeLeft % 60)).padStart(2, '0')
 
@@ -69,23 +59,6 @@ function TurnoContent() {
     called: '¡Tu turno está listo!',
     completed: 'Completado',
     cancelled: 'Cancelado'
-  }
-
-  const playAlert = () => {
-    try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
-      const osc = ctx.createOscillator()
-      const gain = ctx.createGain()
-      osc.connect(gain)
-      gain.connect(ctx.destination)
-      osc.frequency.value = 880
-      gain.gain.value = 0.3
-      osc.start()
-      setTimeout(() => {
-        osc.stop()
-        ctx.close()
-      }, 1500)
-    } catch {}
   }
 
   return (
