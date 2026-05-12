@@ -14,16 +14,17 @@ const statusLabels: Record<string, string> = {
 const playAlertTone = () => {
   try {
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
-    const oscillator = audioContext.createOscillator()
+    const osc = audioContext.createOscillator()
     const gain = audioContext.createGain()
-    oscillator.type = 'sine'
-    oscillator.frequency.value = 440
-    gain.gain.value = 0.14
-    oscillator.connect(gain)
+    osc.connect(gain)
     gain.connect(audioContext.destination)
-    oscillator.start()
-    oscillator.stop(audioContext.currentTime + 0.4)
-    oscillator.onended = () => audioContext.close()
+    osc.frequency.value = 880
+    gain.gain.value = 0.3
+    osc.start()
+    setTimeout(() => {
+      osc.stop()
+      audioContext.close()
+    }, 1000)
   } catch (error) {
     console.warn('Audio no disponible', error)
   }
@@ -31,7 +32,7 @@ const playAlertTone = () => {
 
 const vibrateAlert = () => {
   if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-    navigator.vibrate([500, 200, 500])
+    navigator.vibrate([500, 200, 500, 200, 500])
   }
 }
 
@@ -39,6 +40,14 @@ function formatTime(seconds: number) {
   const minutes = Math.floor(seconds / 60)
   const remainder = seconds % 60
   return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`
+}
+
+function calculateRemainingSecondsFromTurno(turno: any) {
+  if (!turno) return 0
+  const createdAt = new Date(turno.created_at).getTime()
+  const elapsedMinutes = (Date.now() - createdAt) / 60000
+  const remainingMinutes = Math.max(0, (turno.estimated_wait_minutes || 0) - elapsedMinutes)
+  return Math.max(0, Math.round(remainingMinutes * 60))
 }
 
 function TurnoContent() {
@@ -71,7 +80,7 @@ function TurnoContent() {
         setError('Turno no encontrado.')
       } else {
         setTurno(data)
-        setRemainingSeconds(Math.max(0, Math.round((data.estimated_wait_minutes || 0) * 60)))
+        setRemainingSeconds(calculateRemainingSecondsFromTurno(data))
         setHasAlerted(false)
         setStatusAlerted(false)
       }
@@ -88,7 +97,7 @@ function TurnoContent() {
           if (payload.new) {
             const updatedTurno = payload.new as any
             setTurno(updatedTurno)
-            setRemainingSeconds(Math.max(0, Math.round((updatedTurno.estimated_wait_minutes || 0) * 60)))
+            setRemainingSeconds(calculateRemainingSecondsFromTurno(updatedTurno))
             setHasAlerted(false)
             setStatusAlerted(false)
           }
@@ -127,15 +136,15 @@ function TurnoContent() {
 
   const statusLabel = turno ? statusLabels[turno.status] ?? 'Desconocido' : ''
   const countdown = useMemo(() => formatTime(remainingSeconds), [remainingSeconds])
+  const isCalled = turno.status === 'called'
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white"> <div className="text-center p-8">Cargando tu turno...</div> </div>
   if (error) return <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white"> <div className="text-center p-8 text-red-400">{error}</div> </div>
 
-  const isCalled = turno.status === 'called'
-  const isExpired = remainingSeconds === 0 && turno.status !== 'called'
+  const isReady = isCalled || remainingSeconds === 0
 
   return (
-    <div className={`min-h-screen w-full bg-gradient-to-b ${isCalled ? 'from-orange-950 via-orange-700 to-orange-600' : isExpired ? 'from-emerald-900 via-emerald-700 to-emerald-500' : 'from-slate-950 via-slate-900 to-slate-800'} text-white flex flex-col justify-center px-6 py-10`}>
+    <div className={`min-h-screen w-full bg-gradient-to-b ${isReady ? 'from-emerald-900 via-emerald-700 to-emerald-500' : 'from-slate-950 via-slate-900 to-slate-800'} text-white flex flex-col justify-center px-6 py-10`}>
       <div className="mx-auto w-full max-w-sm text-center">
         <div className="mb-6">
           <p className="text-sm uppercase tracking-[0.35em] text-emerald-300 mb-4">NÚMERO DE TURNO</p>
@@ -143,15 +152,15 @@ function TurnoContent() {
         </div>
 
         <div className="mb-6">
-          <p className="text-2xl font-semibold text-white">{turno.customer_name}</p>
+          <p className={`text-2xl font-semibold ${isReady ? 'text-[#003320]' : 'text-white'}`}>{turno.customer_name}</p>
         </div>
 
         <div className="mb-6">
-          <p className="text-lg text-slate-300">{statusLabel}</p>
+          <p className={`text-lg ${isReady ? 'text-[#003320]' : 'text-slate-300'}`}>{statusLabel}</p>
         </div>
 
         <div className="mb-6">
-          <p className="text-6xl font-black tracking-[0.15em] text-emerald-300">{countdown}</p>
+          <p className="text-6xl font-black tracking-[0.15em] text-[#003320]">{countdown}</p>
         </div>
 
         {isCalled && (
@@ -160,7 +169,7 @@ function TurnoContent() {
           </div>
         )}
 
-        <div className="mt-8 text-center text-sm text-slate-400">
+        <div className={`mt-8 text-center text-sm ${isReady ? 'text-[#003320]' : 'text-slate-400'}`}>
           <p>La información se actualiza en tiempo real.</p>
           <p className="mt-2">Si tu turno fue llamado, recibirás alerta sonora y vibración.</p>
         </div>

@@ -49,7 +49,7 @@ export default function CajeroPage() {
   const [loading, setLoading] = useState(false);
   const [successUrl, setSuccessUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
+  const [isProductPanelOpen, setIsProductPanelOpen] = useState(false);
   const selectedItems = useMemo(
     () => products.filter((product) => selectedProducts.includes(product.id)),
     [products, selectedProducts]
@@ -219,7 +219,7 @@ export default function CajeroPage() {
 
     const sequenceNumber = (count ?? 0) + 1;
     const turnNumber = `${selectedCode}${String(sequenceNumber).padStart(3, '0')}`;
-    const token = Math.random().toString(36).slice(2, 12);
+    const token = Math.random().toString(36).substr(2, 9);
 
     const { error } = await supabase.from('turns').insert([
       {
@@ -272,73 +272,25 @@ export default function CajeroPage() {
             <h1 className="text-3xl font-semibold">Panel del Cajero</h1>
             <p className="text-sm text-slate-600">Gestiona productos y registra turnos con separación por negocio.</p>
           </div>
-          <button
-            type="button"
-            onClick={openTV}
-            className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500"
-          >
-            Abrir pantalla TV
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => setIsProductPanelOpen(true)}
+              className="rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
+            >
+              ⚙ Gestionar productos
+            </button>
+            <button
+              type="button"
+              onClick={openTV}
+              className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500"
+            >
+              Abrir pantalla TV
+            </button>
+          </div>
         </header>
 
-        <div className="grid gap-8 lg:grid-cols-2">
-          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-2xl font-semibold mb-4">Mis Productos</h2>
-
-            <div className="mb-6 rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-sm font-semibold text-slate-700 mb-3">Agregar producto</p>
-              <div className="flex gap-3">
-                <input
-                  value={newProductName}
-                  onChange={(event) => setNewProductName(event.target.value)}
-                  className="flex-1 rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-emerald-500"
-                  placeholder="Nombre del producto"
-                />
-                <input
-                  value={newProductMinutes}
-                  onChange={(event) => setNewProductMinutes(event.target.value)}
-                  className="w-20 rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-emerald-500"
-                  placeholder="Min"
-                  type="number"
-                />
-                <button
-                  type="button"
-                  onClick={handleAddProduct}
-                  className="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
-                >
-                  Agregar
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              {products.length === 0 ? (
-                <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-slate-500">
-                  No hay productos registrados.
-                </div>
-              ) : (
-                products.map((product) => (
-                  <div
-                    key={product.id}
-                    className="flex items-center justify-between rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3"
-                  >
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">{product.name}</p>
-                      <p className="text-xs text-slate-500">{product.estimated_minutes} min</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteProduct(product.id)}
-                      className="rounded-2xl bg-rose-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-rose-500"
-                    >
-                      Eliminar
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          </section>
-
+        <div className="space-y-8">
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-2xl font-semibold mb-4">Registrar turno</h2>
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -433,7 +385,6 @@ export default function CajeroPage() {
               </div>
             )}
           </section>
-        </div>
 
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="text-2xl font-semibold mb-4">Turnos activos</h2>
@@ -488,5 +439,6 @@ export default function CajeroPage() {
         </section>
       </div>
     </div>
+  </div>
   );
 }
