@@ -13,5 +13,12 @@ export async function GET(request: NextRequest) {
     .single()
 
   if (error || !data) return NextResponse.json({ error: 'Turno no encontrado' }, { status: 404 })
-  return NextResponse.json(data)
+  
+  const createdAt = new Date(data.created_at).getTime()
+  const now = Date.now()
+  const elapsedSeconds = (now - createdAt) / 1000
+  const totalSeconds = (data.estimated_wait_minutes || 0) * 60
+  const remainingSeconds = Math.max(0, totalSeconds - elapsedSeconds)
+  
+  return NextResponse.json({ ...data, remainingSeconds })
 }

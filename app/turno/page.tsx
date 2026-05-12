@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 function TurnoContent() {
@@ -10,6 +10,9 @@ function TurnoContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [timeLeft, setTimeLeft] = useState(0)
+  const [audioActive, setAudioActive] = useState(false)
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const alertPlayedRef = useRef(false)
 
   useEffect(() => {
     if (!token) {
@@ -26,10 +29,7 @@ function TurnoContent() {
           setError(data.error)
         } else {
           setTurno(data)
-          const created = new Date(data.created_at).getTime()
-          const elapsed = (Date.now() - created) / 1000
-          const total = (data.estimated_wait_minutes || 0) * 60
-          setTimeLeft(Math.max(0, total - elapsed))
+          setTimeLeft(data.remainingSeconds || 0)
         }
       } catch {
         setError('Error al cargar el turno.')
@@ -39,6 +39,44 @@ function TurnoContent() {
 
     fetchData()
   }, [token])
+
+  const handleActivateAudio = () => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+      audioContextRef.current = ctx
+      setAudioActive(true)
+      alertPlayedRef.current = false
+    } catch (e) {
+      console.error('Error activating audio:', e)
+    }
+  }
+
+  const playAlert = () => {
+    if (!audioContextRef.current) return
+    try {
+      const ctx = audioContextRef.current
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.frequency.value = 880
+      gain.gain.value = 0.3
+      osc.start()
+      setTimeout(() => {
+        osc.stop()
+      }, 1500)
+    } catch (e) {
+      console.error('Error playing alert:', e)
+    }
+  }
+
+  useEffect(() => {
+    if (timeLeft === 0 && audioActive && !alertPlayedRef.current) {
+      alertPlayedRef.current = true
+      playAlert()
+      if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 500])
+    }
+  }, [timeLeft, audioActive])
 
   useEffect(() => {
     if (timeLeft <= 0) return
@@ -70,6 +108,27 @@ function TurnoContent() {
         <p style={{fontSize:'0.9rem',color:'#94a3b8',margin:'0 0 2rem'}}>{statusMap[turno.status] || turno.status}</p>
         <p style={{color:'#4ade80',letterSpacing:'0.2em',fontSize:'0.7rem',marginBottom:'0.5rem'}}>TIEMPO RESTANTE</p>
         <h2 style={{fontSize:'4rem',fontWeight:'900',color:'#4ade80',margin:'0'}}>{mins}:{secs}</h2>
+        {!audioActive && (
+          <button
+            onClick={handleActivateAudio}
+            style={{
+              marginTop: '2rem',
+              padding: '0.75rem 1.5rem',
+              background: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '0.5rem',
+              fontSize: '1rem',
+              fontWeight: '600',
+              cursor: 'pointer',
+              transition: 'background 0.3s'
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = '#2563eb')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = '#3b82f6')}
+          >
+            🔔 Activar alerta sonora
+          </button>
+        )}
         {timeLeft === 0 && (
           <div style={{marginTop:'2rem',padding:'1.5rem',background:'#064e3b',borderRadius:'1rem',color:'white'}}>
             <p style={{fontSize:'1.8rem',fontWeight:'900',margin:'0 0 0.5rem 0'}}>¡ORDEN LISTA!</p>
