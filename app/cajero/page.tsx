@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase';
 
 interface Turn {
   id: string;
@@ -77,6 +77,7 @@ export default function CajeroPage() {
   }, [selectedItems]);
 
   const fetchTurns = async () => {
+    const supabase = createClient();
     const { data, error } = await supabase
       .from('turns')
       .select('id, customer_name, whatsapp, turn_number, status, created_at, estimated_wait_minutes')
@@ -93,6 +94,7 @@ export default function CajeroPage() {
   };
 
   const fetchProducts = async () => {
+    const supabase = createClient();
     const { data, error } = await supabase
       .from('products')
       .select('id, name, estimated_minutes')
@@ -111,6 +113,7 @@ export default function CajeroPage() {
     fetchTurns();
     fetchProducts();
 
+    const supabase = createClient();
     const channel = supabase
       .channel('turns-channel')
       .on(
@@ -149,6 +152,7 @@ export default function CajeroPage() {
       return;
     }
 
+    const supabase = createClient();
     const { error } = await supabase.from('products').insert([
       {
         name: newProductName.trim(),
@@ -174,6 +178,7 @@ export default function CajeroPage() {
       return;
     }
 
+    const supabase = createClient();
     const { error } = await supabase.from('products').delete().eq('id', productId);
 
     if (error) {
@@ -208,6 +213,7 @@ export default function CajeroPage() {
     const tomorrow = new Date(today);
     tomorrow.setDate(today.getDate() + 1);
 
+    const supabase = createClient();
     const { count, error: countError } = await supabase
       .from('turns')
       .select('id', { count: 'exact', head: true })
@@ -255,6 +261,7 @@ export default function CajeroPage() {
   };
 
   const updateTurnStatus = async (id: string, status: Turn['status']) => {
+    const supabase = createClient();
     const { error } = await supabase
       .from('turns')
       .update({ status, completed_at: status === 'completed' ? new Date().toISOString() : null })

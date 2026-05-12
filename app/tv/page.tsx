@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase';
 
 interface Turn {
   id: string;
@@ -266,6 +266,7 @@ export default function TVPage() {
   const [qrUrl, setQrUrl] = useState('https://sistema-turnos-nine.vercel.app/registro');
 
   const fetchTurns = async () => {
+    const supabase = createClient();
     const { data, error } = await supabase
       .from('turns')
       .select('id, customer_name, turn_number, status, created_at')
@@ -289,6 +290,7 @@ export default function TVPage() {
     setQrUrl('https://sistema-turnos-nine.vercel.app/registro');
     fetchTurns()
   
+    const supabase = createClient();
     const channel = supabase
       .channel('turns-channel')
       .on('postgres_changes', 
