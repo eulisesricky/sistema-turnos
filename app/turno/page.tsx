@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 function TurnoContent() {
@@ -48,6 +48,16 @@ function TurnoContent() {
     return () => clearInterval(interval)
   }, [timeLeft])
 
+  const alertPlayed = useRef(false)
+
+  useEffect(() => {
+    if (timeLeft === 0 && !alertPlayed.current) {
+      alertPlayed.current = true
+      playAlert()
+      if (navigator.vibrate) navigator.vibrate([500,200,500,200,500])
+    }
+  }, [timeLeft])
+
   const mins = String(Math.floor(timeLeft / 60)).padStart(2, '0')
   const secs = String(Math.floor(timeLeft % 60)).padStart(2, '0')
 
@@ -61,6 +71,23 @@ function TurnoContent() {
     cancelled: 'Cancelado'
   }
 
+  const playAlert = () => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.frequency.value = 880
+      gain.gain.value = 0.3
+      osc.start()
+      setTimeout(() => {
+        osc.stop()
+        ctx.close()
+      }, 1500)
+    } catch {}
+  }
+
   return (
     <div style={{minHeight:'100vh',background:'#0a1628',display:'flex',alignItems:'center',justifyContent:'center',padding:'1rem'}}>
       <div style={{textAlign:'center',color:'white',width:'100%',maxWidth:'400px'}}>
@@ -70,6 +97,12 @@ function TurnoContent() {
         <p style={{fontSize:'0.9rem',color:'#94a3b8',margin:'0 0 2rem'}}>{statusMap[turno.status] || turno.status}</p>
         <p style={{color:'#4ade80',letterSpacing:'0.2em',fontSize:'0.7rem',marginBottom:'0.5rem'}}>TIEMPO RESTANTE</p>
         <h2 style={{fontSize:'4rem',fontWeight:'900',color:'#4ade80',margin:'0'}}>{mins}:{secs}</h2>
+        {timeLeft === 0 && (
+          <div style={{marginTop:'2rem',padding:'1.5rem',background:'#064e3b',borderRadius:'1rem',color:'white'}}>
+            <p style={{fontSize:'1.8rem',fontWeight:'900',margin:'0 0 0.5rem 0'}}>¡ORDEN LISTA!</p>
+            <p style={{fontSize:'0.9rem',margin:'0',color:'#d1d5db'}}>Acércate a retirar tu pedido</p>
+          </div>
+        )}
       </div>
     </div>
   )
