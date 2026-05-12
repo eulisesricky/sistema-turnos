@@ -60,10 +60,21 @@ export default function CajeroPage() {
     [selectedItems]
   );
 
-  const selectedCode = useMemo(
-    () => selectedItems.map((product) => product.name.slice(0, 2).toUpperCase()).join(''),
-    [selectedItems]
-  );
+  const selectedCode = useMemo(() => {
+    return selectedItems
+      .map((product) => {
+        const words = product.name.split(/\s+/).filter(w => w.length > 0);
+        if (words.length > 1) {
+          // Múltiples palabras: primera letra de cada palabra
+          return words.map(w => w[0].toUpperCase()).join('');
+        } else if (words.length === 1) {
+          // Una sola palabra: dos primeras letras
+          return words[0].slice(0, 2).toUpperCase();
+        }
+        return '';
+      })
+      .join('');
+  }, [selectedItems]);
 
   const fetchTurns = async () => {
     const { data, error } = await supabase
@@ -224,8 +235,8 @@ export default function CajeroPage() {
     ]);
 
     if (error) {
-      console.error(error.message);
-      setErrorMessage('Error al registrar el turno.');
+      console.log('Error al registrar turno:', error);
+      setErrorMessage(`Error al registrar el turno: ${error.message}`);
       setLoading(false);
       return;
     }
