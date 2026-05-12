@@ -35,7 +35,6 @@ export default function RegistroPage() {
       .in('status', ['waiting', 'called'])
       .order('created_at', { ascending: false })
       .limit(1)
-      .single()
 
     if (queryError) {
       console.error(queryError)
@@ -44,7 +43,7 @@ export default function RegistroPage() {
       return
     }
 
-    const existingTurn = data && typeof data === 'object' ? data : null
+    const existingTurn = data && Array.isArray(data) && data.length > 0 ? data[0] : null
 
     if (existingTurn && existingTurn.token) {
       router.push(`/turno?token=${existingTurn.token}`)

@@ -169,6 +169,11 @@ export default function CajeroPage() {
   };
 
   const handleDeleteProduct = async (productId: string) => {
+    const confirmed = window.confirm('¿Eliminar este producto?');
+    if (!confirmed) {
+      return;
+    }
+
     const { error } = await supabase.from('products').delete().eq('id', productId);
 
     if (error) {
