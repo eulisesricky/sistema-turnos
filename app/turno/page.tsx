@@ -135,44 +135,34 @@ function TurnoContent() {
   const isExpired = remainingSeconds === 0 && turno.status !== 'called'
 
   return (
-    <div className={`min-h-screen w-full bg-gradient-to-b ${isCalled ? 'from-orange-950 via-orange-700 to-orange-600' : isExpired ? 'from-emerald-900 via-emerald-700 to-emerald-500' : 'from-slate-950 via-slate-900 to-slate-800'} text-white`}>
-      <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-6 py-10">
-        <div className="rounded-[2rem] border border-white/10 bg-slate-950/95 p-8 shadow-2xl shadow-black/60">
-          <div className="mb-6 text-center">
-            <p className="text-sm uppercase tracking-[0.35em] text-emerald-300">Tu turno</p>
-            <h1 className="mt-4 text-5xl font-black tracking-tight sm:text-6xl">{turno.customer_name}</h1>
-            <p className="mt-2 text-base uppercase tracking-[0.35em] text-slate-400">Código</p>
-            <p className="mt-3 text-7xl font-black tracking-[0.15em] text-white sm:text-8xl">{turno.turn_number}</p>
+    <div className={`min-h-screen w-full bg-gradient-to-b ${isCalled ? 'from-orange-950 via-orange-700 to-orange-600' : isExpired ? 'from-emerald-900 via-emerald-700 to-emerald-500' : 'from-slate-950 via-slate-900 to-slate-800'} text-white flex flex-col justify-center px-6 py-10`}>
+      <div className="mx-auto w-full max-w-sm text-center">
+        <div className="mb-6">
+          <p className="text-sm uppercase tracking-[0.35em] text-emerald-300 mb-4">NÚMERO DE TURNO</p>
+          <p className="text-8xl font-black tracking-[0.15em] text-white sm:text-9xl">{turno.turn_number}</p>
+        </div>
+
+        <div className="mb-6">
+          <p className="text-2xl font-semibold text-white">{turno.customer_name}</p>
+        </div>
+
+        <div className="mb-6">
+          <p className="text-lg text-slate-300">{statusLabel}</p>
+        </div>
+
+        <div className="mb-6">
+          <p className="text-6xl font-black tracking-[0.15em] text-emerald-300">{countdown}</p>
+        </div>
+
+        {isCalled && (
+          <div className="mt-8 rounded-[2rem] border border-orange-400 bg-orange-500/10 p-6 text-center text-2xl font-bold uppercase tracking-[0.25em] text-orange-100">
+            ¡ES TU TURNO!
           </div>
+        )}
 
-          <div className="space-y-6">
-            <div className="rounded-[2rem] border border-white/10 bg-black/30 p-6 text-center">
-              <p className="text-sm uppercase tracking-[0.35em] text-slate-300">Estado</p>
-              <p className={`mt-3 text-4xl font-black ${isCalled ? 'text-orange-200' : 'text-white'}`}>{statusLabel}</p>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-[2rem] border border-white/10 bg-black/30 p-5 text-center">
-                <p className="text-sm uppercase tracking-[0.35em] text-slate-400">Tiempo estimado</p>
-                <p className="mt-3 text-3xl font-semibold text-white">{turno.estimated_wait_minutes} min</p>
-              </div>
-              <div className="rounded-[2rem] border border-white/10 bg-black/30 p-5 text-center">
-                <p className="text-sm uppercase tracking-[0.35em] text-slate-400">Cuenta regresiva</p>
-                <p className="mt-3 text-5xl font-black text-emerald-300">{countdown}</p>
-              </div>
-            </div>
-
-            {isCalled && (
-              <div className="rounded-[2rem] border border-orange-400 bg-orange-500/10 p-6 text-center text-xl font-bold uppercase tracking-[0.25em] text-orange-100">
-                ¡ES TU TURNO!
-              </div>
-            )}
-
-            <div className="rounded-[2rem] border border-white/10 bg-black/30 p-6 text-center text-sm text-slate-300">
-              <p>La información se actualiza en tiempo real.</p>
-              <p className="mt-2">Si tu turno fue llamado, recibirás alerta sonora y vibración.</p>
-            </div>
-          </div>
+        <div className="mt-8 text-center text-sm text-slate-400">
+          <p>La información se actualiza en tiempo real.</p>
+          <p className="mt-2">Si tu turno fue llamado, recibirás alerta sonora y vibración.</p>
         </div>
       </div>
     </div>

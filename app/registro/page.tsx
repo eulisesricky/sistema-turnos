@@ -34,6 +34,7 @@ export default function RegistroPage() {
     const { count, error: countError } = await supabase
       .from('turns')
       .select('id', { count: 'exact', head: true })
+      .eq('business_id', DEFAULT_BUSINESS_ID)
       .gte('created_at', today.toISOString())
       .lt('created_at', tomorrow.toISOString())
 

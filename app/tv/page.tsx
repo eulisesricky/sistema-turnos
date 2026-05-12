@@ -269,6 +269,7 @@ export default function TVPage() {
     const { data, error } = await supabase
       .from('turns')
       .select('id, customer_name, turn_number, status, created_at')
+      .eq('business_id', process.env.NEXT_PUBLIC_BUSINESS_ID)
       .in('status', ['waiting', 'called'])
       .order('created_at', { ascending: true });
 
