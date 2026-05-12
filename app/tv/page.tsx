@@ -263,7 +263,7 @@ const renderQR = (matrix: number[][]) => {
 export default function TVPage() {
   const [currentTurn, setCurrentTurn] = useState<Turn | null>(null);
   const [nextTurns, setNextTurns] = useState<Turn[]>([]);
-  const [qrUrl, setQrUrl] = useState('https://sistema-turnos-nine.vercel.app/cajero');
+  const [qrUrl, setQrUrl] = useState('https://sistema-turnos-nine.vercel.app/registro');
 
   const fetchTurns = async () => {
     const { data, error } = await supabase
@@ -285,7 +285,7 @@ export default function TVPage() {
   };
 
   useEffect(() => {
-    setQrUrl('https://sistema-turnos-nine.vercel.app/cajero');
+    setQrUrl('https://sistema-turnos-nine.vercel.app/registro');
     fetchTurns()
   
     const channel = supabase
@@ -337,7 +337,7 @@ export default function TVPage() {
               <div className="overflow-hidden rounded-3xl bg-white p-3 shadow-xl">
                 <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`} alt="QR Code" className="block" />
               </div>
-              <p className="text-center text-lg font-semibold text-slate-200">Escanea para ver tu turno</p>
+              <p className="text-center text-lg font-semibold text-slate-200">Escanea para registrarte</p>
               <p className="text-center text-lg font-bold text-white">{qrUrl}</p>
             </div>
           </aside>
