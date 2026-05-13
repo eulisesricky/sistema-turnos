@@ -42,7 +42,6 @@ export default function CajeroPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [customerName, setCustomerName] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
-  const [orderDescription, setOrderDescription] = useState('');
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [newProductName, setNewProductName] = useState('');
   const [newProductMinutes, setNewProductMinutes] = useState('');
@@ -50,6 +49,10 @@ export default function CajeroPage() {
   const [successUrl, setSuccessUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isProductPanelOpen, setIsProductPanelOpen] = useState(false);
+  const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
+  const [parallelCapacity, setParallelCapacity] = useState(2);
+  const [bufferPercentage, setBufferPercentage] = useState(20);
+  const [currentTime, setCurrentTime] = useState(Date.now());
   const selectedItems = useMemo(
     () => products.filter((product) => selectedProducts.includes(product.id)),
     [products, selectedProducts]
@@ -75,6 +78,13 @@ export default function CajeroPage() {
       })
       .join('');
   }, [selectedItems]);
+
+  const formatRemainingSeconds = (seconds: number) => {
+    const remaining = Math.max(0, seconds);
+    const mins = Math.floor(remaining / 60);
+    const secs = remaining % 60;
+    return `${mins}:${String(secs).padStart(2, '0')}`;
+  };
 
   const fetchTurns = async () => {
     const supabase = createClient();
@@ -109,9 +119,30 @@ export default function CajeroPage() {
     setProducts(data ?? []);
   };
 
+  const fetchSettings = async () => {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('settings')
+      .select('parallel_capacity, buffer_percentage')
+      .eq('business_id', DEFAULT_BUSINESS_ID)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error loading settings:', error.message);
+      return;
+    }
+
+    if (data) {
+      setParallelCapacity(data.parallel_capacity ?? 2);
+      setBufferPercentage(data.buffer_percentage ?? 20);
+    }
+  };
+
   useEffect(() => {
     fetchTurns();
     fetchProducts();
+    fetchSettings();
 
     const supabase = createClient();
     const channel = supabase
@@ -128,6 +159,14 @@ export default function CajeroPage() {
     return () => {
       supabase.removeChannel(channel);
     };
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 30000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleProductToggle = (productId: string) => {
@@ -228,6 +267,28 @@ export default function CajeroPage() {
       return;
     }
 
+    const { data: turnosActivos, error: turnosError } = await supabase
+      .from('turns')
+      .select('estimated_wait_minutes')
+      .eq('business_id', DEFAULT_BUSINESS_ID)
+      .in('status', ['waiting', 'called'])
+      .order('created_at', { ascending: true });
+
+    if (turnosError) {
+      console.error(turnosError.message);
+      setErrorMessage('Error al calcular el tiempo de espera.');
+      setLoading(false);
+      return;
+    }
+
+    const capacity = parallelCapacity || 2;
+    const buffer = bufferPercentage || 20;
+    const tiempoProducto = estimatedMinutes;
+    const tiempoBase = tiempoProducto * (1 + buffer / 100);
+    const turnosEnCola = turnosActivos?.length || 0;
+    const turnosEsperando = Math.floor(turnosEnCola / capacity);
+    const tiempoFinal = Math.round(tiempoBase + turnosEsperando * tiempoBase);
+
     const sequenceNumber = (count ?? 0) + 1;
     const turnNumber = `${selectedCode}${String(sequenceNumber).padStart(3, '0')}`;
     const token = Math.random().toString(36).substr(2, 9);
@@ -238,7 +299,7 @@ export default function CajeroPage() {
         whatsapp,
         turn_number: turnNumber,
         status: 'waiting',
-        estimated_wait_minutes: estimatedMinutes,
+        estimated_wait_minutes: tiempoFinal,
         token,
         queue_id: DEFAULT_QUEUE_ID,
         business_id: DEFAULT_BUSINESS_ID,
@@ -255,7 +316,6 @@ export default function CajeroPage() {
     setSuccessUrl(`https://sistema-turnos-nine.vercel.app/turno?token=${token}`);
     setCustomerName('');
     setWhatsapp('');
-    setOrderDescription('');
     setSelectedProducts([]);
     setLoading(false);
   };
@@ -269,7 +329,34 @@ export default function CajeroPage() {
 
     if (error) {
       console.error(error.message);
+      return;
     }
+
+    if (status === 'completed') {
+      const { data: turnosRestantes, error: remainingError } = await supabase
+        .from('turns')
+        .select('*')
+        .eq('business_id', DEFAULT_BUSINESS_ID)
+        .eq('status', 'waiting')
+        .order('created_at', { ascending: true });
+
+      if (remainingError) {
+        console.error('Error al obtener turnos restantes:', remainingError.message);
+      } else {
+        const capacity = parallelCapacity || 2;
+        turnosRestantes?.forEach(async (turno, index) => {
+          const tiempoProducto = turno.estimated_wait_minutes;
+          const posicion = Math.floor(index / capacity);
+          const nuevoTiempo = Math.round(tiempoProducto * (posicion + 1));
+          await supabase
+            .from('turns')
+            .update({ estimated_wait_minutes: nuevoTiempo })
+            .eq('id', turno.id);
+        });
+      }
+    }
+
+    fetchTurns();
   };
 
   const openTV = () => {
@@ -285,6 +372,13 @@ export default function CajeroPage() {
             <p className="text-sm text-slate-600">Gestiona productos y registra turnos con separación por negocio.</p>
           </div>
           <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => setIsSettingsPanelOpen(true)}
+              className="rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
+            >
+              ⚙ Configuración
+            </button>
             <button
               type="button"
               onClick={() => setIsProductPanelOpen(true)}
@@ -328,16 +422,6 @@ export default function CajeroPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Descripción del pedido</label>
-                <textarea
-                  value={orderDescription}
-                  onChange={(event) => setOrderDescription(event.target.value)}
-                  className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-base outline-none transition focus:border-emerald-500"
-                  placeholder="Ej. 2 pizzas grandes, 1 bebida"
-                  rows={3}
-                />
-              </div>
 
               <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm font-semibold text-slate-700 mb-3">Seleccionar productos</p>
@@ -385,6 +469,7 @@ export default function CajeroPage() {
               >
                 {loading ? 'Registrando...' : 'Registrar turno'}
               </button>
+            <div className="mt-6 text-sm text-slate-500">Capacidad paralela: {parallelCapacity} · Colchón: {bufferPercentage}%</div>
             </form>
 
             {successUrl && (
@@ -397,6 +482,83 @@ export default function CajeroPage() {
               </div>
             )}
           </section>
+
+          {isSettingsPanelOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4">
+              <div className="w-full max-w-xl rounded-[2rem] bg-white p-6 shadow-2xl">
+                <div className="mb-5 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-semibold">Configuración</h2>
+                    <p className="text-sm text-slate-500">Ajusta la capacidad y el colchón de tiempo.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsSettingsPanelOpen(false)}
+                    className="text-slate-500 transition hover:text-slate-900"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+
+                <div className="grid gap-5">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">Órdenes simultáneas</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={parallelCapacity}
+                      onChange={(event) => setParallelCapacity(Number(event.target.value))}
+                      className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-base outline-none transition focus:border-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">Colchón de tiempo %</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={bufferPercentage}
+                      onChange={(event) => setBufferPercentage(Number(event.target.value))}
+                      className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-base outline-none transition focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-6 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsSettingsPanelOpen(false)}
+                    className="rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const supabase = createClient();
+                      const { error } = await supabase
+                        .from('settings')
+                        .upsert(
+                          {
+                            business_id: DEFAULT_BUSINESS_ID,
+                            parallel_capacity: parallelCapacity,
+                            buffer_percentage: bufferPercentage,
+                          },
+                          { onConflict: 'business_id' }
+                        );
+                      if (error) {
+                        console.error('Error guardando configuración:', error.message);
+                      } else {
+                        setIsSettingsPanelOpen(false);
+                      }
+                    }}
+                    className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500"
+                  >
+                    Guardar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="text-2xl font-semibold mb-4">Turnos activos</h2>
@@ -416,6 +578,7 @@ export default function CajeroPage() {
                     <p className="text-sm text-slate-600">WhatsApp: {turn.whatsapp || 'No informado'}</p>
                     <p className="text-sm text-slate-500">Estado: {translateStatus(turn.status)}</p>
                     <p className="text-sm text-slate-500">Tiempo estimado: {turn.estimated_wait_minutes} min</p>
+                    <p className="text-sm text-slate-500">Cuenta atrás: {formatRemainingSeconds(Math.max(0, turn.estimated_wait_minutes * 60 - Math.floor((currentTime - new Date(turn.created_at).getTime()) / 1000)))}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {turn.status === 'waiting' && (

@@ -23,6 +23,15 @@ create table products (
 );
 create index idx_products_business_id on products (business_id);
 
+create table settings (
+  id uuid not null primary key default gen_random_uuid(),
+  business_id uuid references businesses(id),
+  parallel_capacity int not null default 2,
+  buffer_percentage int not null default 20,
+  created_at timestamptz not null default now()
+);
+create unique index idx_settings_business_id on settings (business_id);
+
 create table queues (
   id uuid not null primary key default gen_random_uuid(),
   business_id uuid not null references businesses(id) on delete cascade,
@@ -109,4 +118,15 @@ create policy "Authenticated can insert customers" on customers
 create policy "Authenticated can update customers" on customers
   for update using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 create policy "Authenticated can delete customers" on customers
+  for delete using (auth.role() = 'authenticated');
+
+alter table settings enable row level security;
+
+create policy "Authenticated can select settings" on settings
+  for select using (auth.role() = 'authenticated');
+create policy "Authenticated can insert settings" on settings
+  for insert with check (auth.role() = 'authenticated');
+create policy "Authenticated can update settings" on settings
+  for update using (auth.role() = 'authenticated' ) with check (auth.role() = 'authenticated');
+create policy "Authenticated can delete settings" on settings
   for delete using (auth.role() = 'authenticated');

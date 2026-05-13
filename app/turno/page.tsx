@@ -37,7 +37,18 @@ function TurnoContent() {
       setLoading(false)
     }
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchData()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
     fetchData()
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
   }, [token])
 
   const handleActivateAudio = () => {
