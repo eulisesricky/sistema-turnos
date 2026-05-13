@@ -52,29 +52,35 @@ function TurnoContent() {
   }
 
   const playAlert = () => {
-    if (!audioContextRef.current) return
     try {
       const ctx = audioContextRef.current
-      const osc = ctx.createOscillator()
-      const gain = ctx.createGain()
-      osc.connect(gain)
-      gain.connect(ctx.destination)
-      osc.frequency.value = 880
-      gain.gain.value = 0.3
-      osc.start()
-      setTimeout(() => {
-        osc.stop()
-      }, 1500)
-    } catch (e) {
-      console.error('Error playing alert:', e)
-    }
+      if (!ctx) return
+      
+      let time = ctx.currentTime
+      for (let i = 0; i < 5; i++) {
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+        osc.frequency.value = 880
+        osc.type = 'sine'
+        gain.gain.setValueAtTime(0.4, time)
+        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.4)
+        osc.start(time)
+        osc.stop(time + 0.4)
+        time += 0.6
+      }
+      
+      if (navigator.vibrate) {
+        navigator.vibrate([400, 200, 400, 200, 400, 200, 400, 200, 400])
+      }
+    } catch {}
   }
 
   useEffect(() => {
     if (timeLeft === 0 && audioActive && !alertPlayedRef.current) {
       alertPlayedRef.current = true
       playAlert()
-      if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 500])
     }
   }, [timeLeft, audioActive])
 
