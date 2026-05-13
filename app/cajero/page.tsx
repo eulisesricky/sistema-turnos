@@ -7,6 +7,7 @@ interface Turn {
   id: string;
   customer_name: string;
   whatsapp: string;
+  pin?: string | null;
   turn_number: string;
   status: 'waiting' | 'called' | 'completed' | 'cancelled';
   estimated_wait_minutes: number;
@@ -47,6 +48,7 @@ export default function CajeroPage() {
   const [newProductMinutes, setNewProductMinutes] = useState('');
   const [loading, setLoading] = useState(false);
   const [successUrl, setSuccessUrl] = useState<string | null>(null);
+  const [successPin, setSuccessPin] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isProductPanelOpen, setIsProductPanelOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
@@ -90,7 +92,7 @@ export default function CajeroPage() {
     const supabase = createClient();
     const { data, error } = await supabase
       .from('turns')
-      .select('id, customer_name, whatsapp, turn_number, status, created_at, estimated_wait_minutes')
+      .select('id, customer_name, whatsapp, pin, turn_number, status, created_at, estimated_wait_minutes')
       .eq('business_id', DEFAULT_BUSINESS_ID)
       .in('status', ['waiting', 'called'])
       .order('created_at', { ascending: true });
@@ -292,11 +294,13 @@ export default function CajeroPage() {
     const sequenceNumber = (count ?? 0) + 1;
     const turnNumber = `${selectedCode}${String(sequenceNumber).padStart(3, '0')}`;
     const token = Math.random().toString(36).substr(2, 9);
+    const pin = !whatsapp.trim() ? Math.floor(1000 + Math.random() * 9000).toString() : null;
 
     const { error } = await supabase.from('turns').insert([
       {
         customer_name: customerName,
         whatsapp,
+        pin,
         turn_number: turnNumber,
         status: 'waiting',
         estimated_wait_minutes: tiempoFinal,
@@ -314,6 +318,7 @@ export default function CajeroPage() {
     }
 
     setSuccessUrl(`https://sistema-turnos-nine.vercel.app/turno?token=${token}`);
+    setSuccessPin(pin);
     setCustomerName('');
     setWhatsapp('');
     setSelectedProducts([]);
@@ -479,6 +484,12 @@ export default function CajeroPage() {
                 <a href={successUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-emerald-600 underline break-all">
                   {successUrl}
                 </a>
+                {successPin && (
+                  <p className="mt-3 text-sm font-semibold text-slate-700">PIN del cliente: {successPin}</p>
+                )}
+                {successPin && (
+                  <p className="text-sm text-slate-600">Dígaselo al cliente para que pueda ver su turno.</p>
+                )}
               </div>
             )}
           </section>
@@ -574,7 +585,7 @@ export default function CajeroPage() {
                   className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div>
-                    <p className="text-lg font-semibold">#{turn.turn_number} · {turn.customer_name}</p>
+                    <p className="text-lg font-semibold">#{turn.turn_number} · {turn.customer_name}{turn.pin ? ` — PIN: ${turn.pin}` : ''}</p>
                     <p className="text-sm text-slate-600">WhatsApp: {turn.whatsapp || 'No informado'}</p>
                     <p className="text-sm text-slate-500">Estado: {translateStatus(turn.status)}</p>
                     <p className="text-sm text-slate-500">Tiempo estimado: {turn.estimated_wait_minutes} min</p>
