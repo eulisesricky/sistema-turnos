@@ -66,19 +66,32 @@ export default function CajeroPage() {
   );
 
   const selectedCode = useMemo(() => {
+    const normalize = (name: string) => name.trim().toUpperCase();
+    const twoLetterCode = (name: string) => {
+      const words = normalize(name).split(/\s+/).filter((w) => w.length > 0);
+      if (words.length >= 2) {
+        return `${words[0][0]}${words[1][0]}`;
+      }
+      return words[0]?.slice(0, 2) ?? '';
+    };
+    const firstLetterCode = (name: string) => {
+      const words = normalize(name).split(/\s+/).filter((w) => w.length > 0);
+      return words[0]?.[0] ?? '';
+    };
+
+    if (selectedItems.length === 1) {
+      return twoLetterCode(selectedItems[0].name);
+    }
+
+    if (selectedItems.length === 2) {
+      return selectedItems.map((product) => twoLetterCode(product.name)).join('').slice(0, 4);
+    }
+
     return selectedItems
-      .map((product) => {
-        const words = product.name.split(/\s+/).filter(w => w.length > 0);
-        if (words.length > 1) {
-          // Múltiples palabras: primera letra de cada palabra
-          return words.map(w => w[0].toUpperCase()).join('');
-        } else if (words.length === 1) {
-          // Una sola palabra: dos primeras letras
-          return words[0].slice(0, 2).toUpperCase();
-        }
-        return '';
-      })
-      .join('');
+      .slice(0, 4)
+      .map((product) => firstLetterCode(product.name))
+      .join('')
+      .slice(0, 4);
   }, [selectedItems]);
 
   const formatRemainingSeconds = (seconds: number) => {
