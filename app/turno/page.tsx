@@ -9,6 +9,7 @@ function TurnoContent() {
   const [turno, setTurno] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [offline, setOffline] = useState(false)
   const [timeLeft, setTimeLeft] = useState(0)
   const [audioActive, setAudioActive] = useState(false)
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -29,10 +30,33 @@ function TurnoContent() {
           setError(data.error)
         } else {
           setTurno(data)
+          setOffline(false)
           setTimeLeft(data.remainingSeconds || 0)
+          localStorage.setItem(
+            'turno_cache_' + token,
+            JSON.stringify({
+              ...data,
+              cachedAt: Date.now(),
+              remainingSeconds: data.remainingSeconds,
+            })
+          )
         }
-      } catch {
-        setError('Error al cargar el turno.')
+      } catch (err) {
+        const cached = localStorage.getItem('turno_cache_' + token)
+        if (cached) {
+          try {
+            const data = JSON.parse(cached)
+            setTurno(data)
+            setOffline(true)
+            const elapsed = Math.floor((Date.now() - data.cachedAt) / 1000)
+            const remaining = Math.max(0, (data.remainingSeconds || 0) - elapsed)
+            setTimeLeft(remaining)
+          } catch {
+            setError('Sin conexión a internet.')
+          }
+        } else {
+          setError('Sin conexión a internet.')
+        }
       }
       setLoading(false)
     }
@@ -118,12 +142,18 @@ function TurnoContent() {
 
   return (
     <div style={{minHeight:'100vh',background:'#0a1628',display:'flex',alignItems:'center',justifyContent:'center',padding:'1rem'}}>
-      <div style={{textAlign:'center',color:'white',width:'100%',maxWidth:'400px'}}>
-        <p style={{color:'#4ade80',letterSpacing:'0.2em',fontSize:'0.8rem',marginBottom:'0.5rem'}}>NÚMERO DE TURNO</p>
-        <h1 style={{fontSize:'5rem',fontWeight:'900',margin:'0',lineHeight:'1'}}>{turno.turn_number}</h1>
+      <div style={{width:'100%',maxWidth:'400px'}}>
+        {offline && (
+          <div style={{background:'#854d0e',color:'white',padding:'0.5rem',textAlign:'center',borderRadius:'0.5rem',marginBottom:'1rem'}}>
+            📵 Sin internet — reconéctate para mayor precisión
+          </div>
+        )}
+        <div style={{textAlign:'center',color:'white'}}>
+          <p style={{color:'#4ade80',letterSpacing:'0.2em',fontSize:'0.8rem',marginBottom:'0.5rem'}}>NÚMERO DE TURNO</p>
+          <h1 style={{fontSize:'5rem',fontWeight:'900',margin:'0',lineHeight:'1'}}>{turno.turn_number}</h1>
         <p style={{fontSize:'1.2rem',fontWeight:'600',margin:'1rem 0 0.5rem'}}>{turno.customer_name}</p>
         <p style={{fontSize:'0.9rem',color:'#94a3b8',margin:'0 0 2rem'}}>{statusMap[turno.status] || turno.status}</p>
-        <p style={{color:'#4ade80',letterSpacing:'0.2em',fontSize:'0.7rem',marginBottom:'0.5rem'}}>TIEMPO RESTANTE</p>
+        <p style={{color:'#4ade80',letterSpacing:'0.2em',fontSize:'0.7rem',marginBottom:'0.5rem'}}>TIEMPO ESTIMADO</p>
         <h2 style={{fontSize:'4rem',fontWeight:'900',color:'#4ade80',margin:'0'}}>{mins}:{secs}</h2>
         {!audioActive && (
           <button
@@ -152,6 +182,7 @@ function TurnoContent() {
             <p style={{fontSize:'0.9rem',margin:'0',color:'#d1d5db'}}>Acércate a retirar tu pedido</p>
           </div>
         )}
+        </div>
       </div>
     </div>
   )
