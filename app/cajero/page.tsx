@@ -338,6 +338,18 @@ export default function CajeroPage() {
     setLoading(false);
   };
 
+  const adjustTurnTime = async (id: string, deltaMinutes: number, currentEstimated: number) => {
+    const supabase = createClient()
+    // Sumar deltaMinutes a estimated_wait_minutes ajusta el tiempo restante en la misma cantidad
+    // porque remainingSeconds = estimated_wait_minutes * 60 - elapsed
+    const newEstimated = Math.max(1, Math.round(currentEstimated + deltaMinutes))
+    const { error } = await supabase
+      .from('turns')
+      .update({ estimated_wait_minutes: newEstimated })
+      .eq('id', id)
+    if (error) console.error('Error al ajustar tiempo:', error.message)
+  }
+
   const updateTurnStatus = async (id: string, status: Turn['status']) => {
     const supabase = createClient();
     const { error } = await supabase
@@ -604,32 +616,61 @@ export default function CajeroPage() {
                     <p className="text-sm text-slate-500">Tiempo estimado: {turn.estimated_wait_minutes} min</p>
                     <p className="text-sm text-slate-500">Cuenta atrás: {formatRemainingSeconds(Math.max(0, turn.estimated_wait_minutes * 60 - Math.floor((currentTime - new Date(turn.created_at).getTime()) / 1000)))}</p>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {turn.status === 'waiting' && (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex flex-wrap gap-2">
+                      {turn.status === 'waiting' && (
+                        <button
+                          type="button"
+                          onClick={() => updateTurnStatus(turn.id, 'called')}
+                          className="rounded-2xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-400"
+                        >
+                          Llamar
+                        </button>
+                      )}
+                      {turn.status === 'called' && (
+                        <button
+                          type="button"
+                          onClick={() => updateTurnStatus(turn.id, 'completed')}
+                          className="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
+                        >
+                          Completar
+                        </button>
+                      )}
                       <button
                         type="button"
-                        onClick={() => updateTurnStatus(turn.id, 'called')}
-                        className="rounded-2xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-400"
+                        onClick={() => updateTurnStatus(turn.id, 'cancelled')}
+                        className="rounded-2xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-500"
                       >
-                        Llamar
+                        Cancelar
                       </button>
-                    )}
-                    {turn.status === 'called' && (
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-slate-400 mr-1">Ajustar:</span>
                       <button
                         type="button"
-                        onClick={() => updateTurnStatus(turn.id, 'completed')}
-                        className="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
+                        onClick={() => adjustTurnTime(turn.id, -5, turn.estimated_wait_minutes)}
+                        className="rounded-xl bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-300"
+                        title="Restar 5 minutos"
                       >
-                        Completar
+                        −5 min
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => updateTurnStatus(turn.id, 'cancelled')}
-                      className="rounded-2xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-500"
-                    >
-                      Cancelar
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => adjustTurnTime(turn.id, 5, turn.estimated_wait_minutes)}
+                        className="rounded-xl bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-300"
+                        title="Sumar 5 minutos"
+                      >
+                        +5 min
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => adjustTurnTime(turn.id, 10, turn.estimated_wait_minutes)}
+                        className="rounded-xl bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800 transition hover:bg-amber-200"
+                        title="Sumar 10 minutos por demora"
+                      >
+                        +10 min
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))

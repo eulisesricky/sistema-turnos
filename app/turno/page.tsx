@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { createClient } from '@/lib/supabase'
 
 function TurnoContent() {
   const searchParams = useSearchParams()
@@ -12,101 +13,14 @@ function TurnoContent() {
   const [offline, setOffline] = useState(false)
   const [timeLeft, setTimeLeft] = useState(0)
   const [audioActive, setAudioActive] = useState(false)
+  const [calledByStaff, setCalledByStaff] = useState(false)
+  const [delayNotice, setDelayNotice] = useState(false)
   const audioContextRef = useRef<AudioContext | null>(null)
   const alertPlayedRef = useRef(false)
-  // Timestamp absoluto de cuando el temporizador llega a 0
-  // Usar marca de tiempo en lugar de decrementar evita que pausas/background descuadren el reloj
+  // Timestamp absoluto cuando llega a cero — no se desincroniza en background ni en browsers viejos
   const expiryTimeRef = useRef<number>(0)
-
-  const fetchData = useCallback(async () => {
-    if (!token) return
-    try {
-      const res = await fetch(`/api/turno?token=${token}`, { cache: 'no-store' })
-      const data = await res.json()
-      if (data.error) {
-        setError(data.error)
-      } else {
-        const remaining = data.remainingSeconds || 0
-        expiryTimeRef.current = Date.now() + remaining * 1000
-        if (remaining > 0) alertPlayedRef.current = false
-        setTurno(data)
-        setOffline(false)
-        setTimeLeft(remaining)
-        localStorage.setItem(
-          'turno_cache_' + token,
-          JSON.stringify({ ...data, cachedAt: Date.now(), remainingSeconds: remaining })
-        )
-      }
-    } catch {
-      // Sin conexión: recalcular tiempo restante desde la última sincronización
-      setOffline(true)
-      const cached = localStorage.getItem('turno_cache_' + token)
-      if (cached) {
-        try {
-          const data = JSON.parse(cached)
-          const elapsed = Math.floor((Date.now() - data.cachedAt) / 1000)
-          const remaining = Math.max(0, (data.remainingSeconds || 0) - elapsed)
-          expiryTimeRef.current = Date.now() + remaining * 1000
-          setTurno(data)
-          setTimeLeft(remaining)
-        } catch {
-          setError('Sin conexión a internet.')
-        }
-      } else {
-        setError('Sin conexión a internet.')
-      }
-    }
-    setLoading(false)
-  }, [token])
-
-  useEffect(() => {
-    if (!token) {
-      setError('No se encontró el token.')
-      setLoading(false)
-      return
-    }
-
-    // Al volver de background, recalcular desde el timestamp absoluto
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') fetchData()
-    }
-    // Eventos de red para detección inmediata y confiable
-    const handleOnline = () => { setOffline(false); fetchData() }
-    const handleOffline = () => setOffline(true)
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    window.addEventListener('online', handleOnline)
-    window.addEventListener('offline', handleOffline)
-    fetchData()
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      window.removeEventListener('online', handleOnline)
-      window.removeEventListener('offline', handleOffline)
-    }
-  }, [token, fetchData])
-
-  // Temporizador basado en timestamp absoluto — no se desincroniza en background ni en browsers viejos
-  useEffect(() => {
-    if (!turno) return
-    const interval = setInterval(() => {
-      if (expiryTimeRef.current === 0) return
-      const left = Math.max(0, Math.ceil((expiryTimeRef.current - Date.now()) / 1000))
-      setTimeLeft(left)
-    }, 500)
-    return () => clearInterval(interval)
-  }, [turno])
-
-  const handleActivateAudio = () => {
-    try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
-      audioContextRef.current = ctx
-      setAudioActive(true)
-      alertPlayedRef.current = false
-    } catch (e) {
-      console.error('Error activating audio:', e)
-    }
-  }
+  // Último estimated_wait_minutes conocido — para detectar incrementos de tiempo
+  const prevEstimatedRef = useRef<number>(0)
 
   const playAlert = () => {
     try {
@@ -130,6 +44,157 @@ function TurnoContent() {
         navigator.vibrate([400, 200, 400, 200, 400, 200, 400, 200, 400])
       }
     } catch {}
+  }
+
+  const fetchData = useCallback(async () => {
+    if (!token) return
+    try {
+      const res = await fetch(`/api/turno?token=${token}`, { cache: 'no-store' })
+      const data = await res.json()
+      if (data.error) {
+        setError(data.error)
+      } else {
+        const remaining = data.remainingSeconds || 0
+        prevEstimatedRef.current = data.estimated_wait_minutes
+        if (remaining > 0) alertPlayedRef.current = false
+
+        if (data.status === 'called') {
+          // El cajero ya llamó este turno
+          setCalledByStaff(true)
+          expiryTimeRef.current = 0
+          setTimeLeft(0)
+        } else {
+          expiryTimeRef.current = Date.now() + remaining * 1000
+          setTimeLeft(remaining)
+        }
+
+        setTurno(data)
+        setOffline(false)
+        localStorage.setItem(
+          'turno_cache_' + token,
+          JSON.stringify({ ...data, cachedAt: Date.now(), remainingSeconds: remaining })
+        )
+      }
+    } catch {
+      setOffline(true)
+      const cached = localStorage.getItem('turno_cache_' + token)
+      if (cached) {
+        try {
+          const data = JSON.parse(cached)
+          const elapsed = Math.floor((Date.now() - data.cachedAt) / 1000)
+          const remaining = Math.max(0, (data.remainingSeconds || 0) - elapsed)
+          expiryTimeRef.current = Date.now() + remaining * 1000
+          prevEstimatedRef.current = data.estimated_wait_minutes
+          setTurno(data)
+          setTimeLeft(remaining)
+        } catch {
+          setError('Sin conexión a internet.')
+        }
+      } else {
+        setError('Sin conexión a internet.')
+      }
+    }
+    setLoading(false)
+  }, [token])
+
+  useEffect(() => {
+    if (!token) {
+      setError('No se encontró el token.')
+      setLoading(false)
+      return
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') fetchData()
+    }
+    const handleOnline = () => { setOffline(false); fetchData() }
+    const handleOffline = () => setOffline(true)
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    fetchData()
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [token, fetchData])
+
+  // Suscripción en tiempo real: recibe actualizaciones del cajero instantáneamente
+  useEffect(() => {
+    if (!turno?.id || !token) return
+    let supabase: ReturnType<typeof createClient>
+    try {
+      supabase = createClient()
+    } catch {
+      return // sin variables de entorno (dev sin Supabase)
+    }
+
+    const channel = supabase
+      .channel(`turn-${token}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'turns' },
+        (payload: any) => {
+          const updated = payload.new
+          if (updated.token !== token) return
+
+          const elapsed = (Date.now() - new Date(updated.created_at).getTime()) / 1000
+          const newRemaining = Math.max(0, updated.estimated_wait_minutes * 60 - elapsed)
+
+          if (updated.status === 'called') {
+            // Cajero llamó el turno antes de que el tiempo llegara a cero
+            setCalledByStaff(true)
+            setDelayNotice(false)
+            expiryTimeRef.current = 0
+            setTimeLeft(0)
+            if (!alertPlayedRef.current) {
+              alertPlayedRef.current = true
+              playAlert()
+            }
+          } else {
+            // Actualizó el tiempo: detectar si fue un incremento (demora)
+            if (
+              prevEstimatedRef.current > 0 &&
+              updated.estimated_wait_minutes > prevEstimatedRef.current
+            ) {
+              setDelayNotice(true)
+            }
+            expiryTimeRef.current = Date.now() + newRemaining * 1000
+            setTimeLeft(Math.ceil(newRemaining))
+          }
+
+          prevEstimatedRef.current = updated.estimated_wait_minutes
+          setTurno((prev: any) => ({ ...prev, ...updated, remainingSeconds: newRemaining }))
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [turno?.id, token])
+
+  // Temporizador basado en timestamp absoluto — sobrevive background/suspensión/throttle
+  useEffect(() => {
+    if (!turno) return
+    const interval = setInterval(() => {
+      if (expiryTimeRef.current === 0) return
+      const left = Math.max(0, Math.ceil((expiryTimeRef.current - Date.now()) / 1000))
+      setTimeLeft(left)
+    }, 500)
+    return () => clearInterval(interval)
+  }, [turno])
+
+  const handleActivateAudio = () => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+      audioContextRef.current = ctx
+      setAudioActive(true)
+      alertPlayedRef.current = false
+    } catch (e) {
+      console.error('Error activating audio:', e)
+    }
   }
 
   useEffect(() => {
@@ -160,13 +225,18 @@ function TurnoContent() {
             📵 Sin internet — reconéctate para mayor precisión
           </div>
         )}
+        {delayNotice && (
+          <div style={{background:'#44403c',color:'white',padding:'0.75rem 1rem',textAlign:'center',borderRadius:'0.5rem',marginBottom:'1rem',fontSize:'0.9rem',lineHeight:'1.4'}}>
+            ⏳ Tu pedido tomará un poco más de lo previsto. ¡Gracias por tu paciencia!
+          </div>
+        )}
         <div style={{textAlign:'center',color:'white'}}>
           <p style={{color:'#4ade80',letterSpacing:'0.2em',fontSize:'0.8rem',marginBottom:'0.5rem'}}>NÚMERO DE TURNO</p>
           <h1 style={{fontSize:'5rem',fontWeight:'900',margin:'0',lineHeight:'1'}}>{turno.turn_number}</h1>
           <p style={{fontSize:'1.2rem',fontWeight:'600',margin:'1rem 0 0.5rem'}}>{turno.customer_name}</p>
           <p style={{fontSize:'0.9rem',color:'#94a3b8',margin:'0 0 2rem'}}>{statusMap[turno.status] || turno.status}</p>
           <p style={{color:'#4ade80',letterSpacing:'0.2em',fontSize:'0.7rem',marginBottom:'0.5rem'}}>TIEMPO ESTIMADO</p>
-          <h2 style={{fontSize:'4rem',fontWeight:'900',color:'#4ade80',margin:'0'}}>{mins}:{secs}</h2>
+          <h2 style={{fontSize:'4rem',fontWeight:'900',color: timeLeft === 0 ? '#fbbf24' : '#4ade80',margin:'0'}}>{mins}:{secs}</h2>
           {!audioActive && (
             <button
               onClick={handleActivateAudio}
@@ -188,10 +258,26 @@ function TurnoContent() {
               🔔 Activar alerta sonora
             </button>
           )}
-          {timeLeft === 0 && (
-            <div style={{marginTop:'2rem',padding:'1.5rem',background:'#064e3b',borderRadius:'1rem',color:'white'}}>
-              <p style={{fontSize:'1.8rem',fontWeight:'900',margin:'0 0 0.5rem 0'}}>¡ORDEN LISTA!</p>
-              <p style={{fontSize:'0.9rem',margin:'0',color:'#d1d5db'}}>Acércate a retirar tu pedido</p>
+          {timeLeft === 0 && turno && (
+            <div style={{
+              marginTop:'2rem',
+              padding:'1.5rem',
+              background: calledByStaff ? '#1e3a5f' : '#064e3b',
+              borderRadius:'1rem',
+              color:'white',
+              border: calledByStaff ? '2px solid #3b82f6' : '2px solid #10b981'
+            }}>
+              {calledByStaff ? (
+                <>
+                  <p style={{fontSize:'1.8rem',fontWeight:'900',margin:'0 0 0.5rem 0'}}>¡TE ESTÁN LLAMANDO!</p>
+                  <p style={{fontSize:'0.9rem',margin:'0',color:'#93c5fd'}}>El cajero te llama — acércate al mostrador</p>
+                </>
+              ) : (
+                <>
+                  <p style={{fontSize:'1.8rem',fontWeight:'900',margin:'0 0 0.5rem 0'}}>¡ORDEN LISTA!</p>
+                  <p style={{fontSize:'0.9rem',margin:'0',color:'#d1d5db'}}>Acércate a retirar tu pedido</p>
+                </>
+              )}
             </div>
           )}
         </div>
