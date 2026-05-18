@@ -154,7 +154,7 @@ function TurnoContent() {
               alertPlayedRef.current = true
               playAlert()
             }
-          } else {
+          } else if (updated.status === 'waiting') {
             // Actualizó el tiempo: detectar si fue un incremento (demora)
             if (
               prevEstimatedRef.current > 0 &&
@@ -165,6 +165,7 @@ function TurnoContent() {
             expiryTimeRef.current = Date.now() + newRemaining * 1000
             setTimeLeft(Math.ceil(newRemaining))
           }
+          // completed/cancelled: no tocar el timer, debe quedar en cero
 
           prevEstimatedRef.current = updated.estimated_wait_minutes
           setTurno((prev: any) => ({ ...prev, ...updated, remainingSeconds: newRemaining }))

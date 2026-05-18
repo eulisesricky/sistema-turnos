@@ -340,14 +340,26 @@ export default function CajeroPage() {
 
   const adjustTurnTime = async (id: string, deltaMinutes: number, currentEstimated: number) => {
     const supabase = createClient()
-    // Sumar deltaMinutes a estimated_wait_minutes ajusta el tiempo restante en la misma cantidad
-    // porque remainingSeconds = estimated_wait_minutes * 60 - elapsed
     const newEstimated = Math.max(1, Math.round(currentEstimated + deltaMinutes))
     const { error } = await supabase
       .from('turns')
       .update({ estimated_wait_minutes: newEstimated })
       .eq('id', id)
-    if (error) console.error('Error al ajustar tiempo:', error.message)
+    if (error) { console.error('Error al ajustar tiempo:', error.message); return }
+
+    // Cascade: sumar el mismo delta a todos los turnos en espera posteriores
+    const thisTurn = turns.find((t) => t.id === id)
+    if (!thisTurn) return
+    const subsequent = turns.filter(
+      (t) => t.status === 'waiting' && t.created_at > thisTurn.created_at
+    )
+    for (const turn of subsequent) {
+      const newEst = Math.max(1, Math.round(turn.estimated_wait_minutes + deltaMinutes))
+      await supabase
+        .from('turns')
+        .update({ estimated_wait_minutes: newEst })
+        .eq('id', turn.id)
+    }
   }
 
   const updateTurnStatus = async (id: string, status: Turn['status']) => {
