@@ -352,37 +352,64 @@ export default function CajeroPage() {
 
   const updateTurnStatus = async (id: string, status: Turn['status']) => {
     const supabase = createClient();
-    const { error } = await supabase
-      .from('turns')
-      .update({ status, completed_at: status === 'completed' ? new Date().toISOString() : null })
-      .eq('id', id);
-
-    if (error) {
-      console.error(error.message);
-      return;
-    }
 
     if (status === 'completed') {
-      const { data: turnosRestantes, error: remainingError } = await supabase
+      // Snapshot the queue BEFORE completing to know each turn's original position
+      const { data: allActive, error: activeError } = await supabase
         .from('turns')
-        .select('*')
+        .select('id, estimated_wait_minutes, status')
         .eq('business_id', DEFAULT_BUSINESS_ID)
-        .eq('status', 'waiting')
+        .in('status', ['waiting', 'called'])
         .order('created_at', { ascending: true });
 
-      if (remainingError) {
-        console.error('Error al obtener turnos restantes:', remainingError.message);
-      } else {
+      if (activeError) {
+        console.error('Error al obtener turnos activos:', activeError.message);
+        return;
+      }
+
+      const completedOrigIndex = allActive?.findIndex((t) => t.id === id) ?? -1;
+
+      const { error } = await supabase
+        .from('turns')
+        .update({ status: 'completed', completed_at: new Date().toISOString() })
+        .eq('id', id);
+
+      if (error) {
+        console.error(error.message);
+        return;
+      }
+
+      if (completedOrigIndex >= 0 && allActive) {
         const capacity = parallelCapacity || 2;
-        turnosRestantes?.forEach(async (turno, index) => {
-          const tiempoProducto = turno.estimated_wait_minutes;
-          const posicion = Math.floor(index / capacity);
-          const nuevoTiempo = Math.round(tiempoProducto * (posicion + 1));
+        for (let origIndex = 0; origIndex < allActive.length; origIndex++) {
+          const turn = allActive[origIndex];
+          if (turn.id === id) continue;
+          if (turn.status !== 'waiting') continue; // called turns are already being served
+
+          // Derive the base (own) time from the original queue position
+          const origSlots = Math.floor(origIndex / capacity);
+          const tiempoBase = turn.estimated_wait_minutes / (origSlots + 1);
+
+          // Shift index by 1 for every turn that was AFTER the completed turn
+          const newIndex = origIndex > completedOrigIndex ? origIndex - 1 : origIndex;
+          const newSlots = Math.floor(newIndex / capacity);
+          const nuevoTiempo = Math.max(1, Math.round(tiempoBase * (newSlots + 1)));
+
           await supabase
             .from('turns')
             .update({ estimated_wait_minutes: nuevoTiempo })
-            .eq('id', turno.id);
-        });
+            .eq('id', turn.id);
+        }
+      }
+    } else {
+      const { error } = await supabase
+        .from('turns')
+        .update({ status, completed_at: null })
+        .eq('id', id);
+
+      if (error) {
+        console.error(error.message);
+        return;
       }
     }
 
