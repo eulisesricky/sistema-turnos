@@ -369,7 +369,7 @@ export default function CajeroPage() {
       // Snapshot the queue BEFORE completing to know each turn's original position
       const { data: allActive, error: activeError } = await supabase
         .from('turns')
-        .select('id, estimated_wait_minutes, status')
+        .select('id, estimated_wait_minutes, status, created_at')
         .eq('business_id', DEFAULT_BUSINESS_ID)
         .in('status', ['waiting', 'called'])
         .order('created_at', { ascending: true });
@@ -393,19 +393,28 @@ export default function CajeroPage() {
 
       if (completedOrigIndex >= 0 && allActive) {
         const capacity = parallelCapacity || 2;
+        const bufferMultiplier = 1 + (bufferPercentage || 20) / 100;
+
         for (let origIndex = 0; origIndex < allActive.length; origIndex++) {
           const turn = allActive[origIndex];
           if (turn.id === id) continue;
           if (turn.status !== 'waiting') continue; // called turns are already being served
 
-          // Derive the base (own) time from the original queue position
+          // Derive the base (buffered) time and the raw product time from original position
           const origSlots = Math.floor(origIndex / capacity);
           const tiempoBase = turn.estimated_wait_minutes / (origSlots + 1);
+          const rawProductMinutes = tiempoBase / bufferMultiplier;
 
           // Shift index by 1 for every turn that was AFTER the completed turn
           const newIndex = origIndex > completedOrigIndex ? origIndex - 1 : origIndex;
           const newSlots = Math.floor(newIndex / capacity);
-          const nuevoTiempo = Math.max(1, Math.round(tiempoBase * (newSlots + 1)));
+          let nuevoTiempo = Math.max(1, Math.round(tiempoBase * (newSlots + 1)));
+
+          // Floor: remaining must never drop below the raw product time
+          // remaining = est*60 - elapsed → est_min = (rawProduct*60 + elapsed) / 60
+          const elapsedSeconds = (Date.now() - new Date(turn.created_at).getTime()) / 1000;
+          const estMinimo = Math.ceil((rawProductMinutes * 60 + elapsedSeconds) / 60);
+          nuevoTiempo = Math.max(nuevoTiempo, estMinimo);
 
           await supabase
             .from('turns')
