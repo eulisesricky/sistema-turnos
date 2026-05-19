@@ -393,28 +393,24 @@ export default function CajeroPage() {
 
       if (completedOrigIndex >= 0 && allActive) {
         const capacity = parallelCapacity || 2;
-        const bufferMultiplier = 1 + (bufferPercentage || 20) / 100;
 
         for (let origIndex = 0; origIndex < allActive.length; origIndex++) {
           const turn = allActive[origIndex];
           if (turn.id === id) continue;
-          if (turn.status !== 'waiting') continue; // called turns are already being served
+          if (turn.status !== 'waiting') continue;
 
-          // Derive the base (buffered) time and the raw product time from original position
+          // Tiempo base = lo que le corresponde a este turno solo (con colchón),
+          // como si estuviera primero en la cola. Es el piso mínimo.
           const origSlots = Math.floor(origIndex / capacity);
           const tiempoBase = turn.estimated_wait_minutes / (origSlots + 1);
-          const rawProductMinutes = tiempoBase / bufferMultiplier;
 
-          // Shift index by 1 for every turn that was AFTER the completed turn
+          // Nueva posición tras eliminar el turno completado
           const newIndex = origIndex > completedOrigIndex ? origIndex - 1 : origIndex;
           const newSlots = Math.floor(newIndex / capacity);
-          let nuevoTiempo = Math.max(1, Math.round(tiempoBase * (newSlots + 1)));
+          const calculado = Math.round(tiempoBase * (newSlots + 1));
 
-          // Floor: remaining must never drop below the raw product time
-          // remaining = est*60 - elapsed → est_min = (rawProduct*60 + elapsed) / 60
-          const elapsedSeconds = (Date.now() - new Date(turn.created_at).getTime()) / 1000;
-          const estMinimo = Math.ceil((rawProductMinutes * 60 + elapsedSeconds) / 60);
-          nuevoTiempo = Math.max(nuevoTiempo, estMinimo);
+          // Nunca puede quedar por debajo de su propio tiempoBase (creación + colchón)
+          const nuevoTiempo = Math.max(Math.round(tiempoBase), calculado);
 
           await supabase
             .from('turns')
