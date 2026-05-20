@@ -399,8 +399,7 @@ export default function CajeroPage() {
           if (turn.id === id) continue;
           if (turn.status !== 'waiting') continue;
 
-          // Tiempo base = lo que le corresponde a este turno solo (con colchón),
-          // como si estuviera primero en la cola. Es el piso mínimo.
+          // Tiempo base = lo que le corresponde a este turno solo (con colchón)
           const origSlots = Math.floor(origIndex / capacity);
           const tiempoBase = turn.estimated_wait_minutes / (origSlots + 1);
 
@@ -409,8 +408,12 @@ export default function CajeroPage() {
           const newSlots = Math.floor(newIndex / capacity);
           const calculado = Math.round(tiempoBase * (newSlots + 1));
 
-          // Nunca puede quedar por debajo de su propio tiempoBase (creación + colchón)
-          const nuevoTiempo = Math.max(Math.round(tiempoBase), calculado);
+          // Piso: el tiempo restante nunca puede ser menor que tiempoBase.
+          // remaining = nuevoTiempo*60 - elapsed  ≥  tiempoBase*60
+          // → nuevoTiempo ≥ tiempoBase + elapsed/60
+          const elapsedSeconds = (Date.now() - new Date(turn.created_at).getTime()) / 1000;
+          const pisoConElapsed = Math.ceil(tiempoBase + elapsedSeconds / 60);
+          const nuevoTiempo = Math.max(calculado, pisoConElapsed);
 
           await supabase
             .from('turns')
