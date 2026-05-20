@@ -53,6 +53,7 @@ export default function CajeroPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isProductPanelOpen, setIsProductPanelOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
+  const [settingsSaved, setSettingsSaved] = useState(false);
   const [parallelCapacity, setParallelCapacity] = useState(2);
   const [bufferPercentage, setBufferPercentage] = useState(20);
   const [currentTime, setCurrentTime] = useState(Date.now());
@@ -568,77 +569,86 @@ export default function CajeroPage() {
           </section>
 
           {isSettingsPanelOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4">
-              <div className="w-full max-w-xl rounded-[2rem] bg-white p-6 shadow-2xl">
-                <div className="mb-5 flex items-center justify-between">
-                  <div>
-                    <h2 className="text-2xl font-semibold">Configuración</h2>
-                    <p className="text-sm text-slate-500">Ajusta la capacidad y el colchón de tiempo.</p>
+            <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 p-4">
+              <div className="flex min-h-full items-center justify-center">
+                <div className="w-full max-w-xl rounded-[2rem] bg-white p-6 shadow-2xl">
+                  <div className="mb-5 flex items-center justify-between">
+                    <div>
+                      <h2 className="text-2xl font-semibold">Configuración</h2>
+                      <p className="text-sm text-slate-500">Ajusta la capacidad y el colchón de tiempo.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setIsSettingsPanelOpen(false); setSettingsSaved(false); }}
+                      className="text-slate-500 transition hover:text-slate-900"
+                    >
+                      Cerrar
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsSettingsPanelOpen(false)}
-                    className="text-slate-500 transition hover:text-slate-900"
-                  >
-                    Cerrar
-                  </button>
-                </div>
 
-                <div className="grid gap-5">
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">Órdenes simultáneas</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={parallelCapacity}
-                      onChange={(event) => setParallelCapacity(Number(event.target.value))}
-                      className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-base outline-none transition focus:border-emerald-500"
-                    />
+                  <div className="grid gap-5">
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">Órdenes simultáneas</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={parallelCapacity}
+                        onChange={(event) => setParallelCapacity(Number(event.target.value))}
+                        className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-base outline-none transition focus:border-emerald-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">Colchón de tiempo %</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={bufferPercentage}
+                        onChange={(event) => setBufferPercentage(Number(event.target.value))}
+                        className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-base outline-none transition focus:border-emerald-500"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">Colchón de tiempo %</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={bufferPercentage}
-                      onChange={(event) => setBufferPercentage(Number(event.target.value))}
-                      className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-base outline-none transition focus:border-emerald-500"
-                    />
-                  </div>
-                </div>
 
-                <div className="mt-6 flex justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setIsSettingsPanelOpen(false)}
-                    className="rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const supabase = createClient();
-                      const { error } = await supabase
-                        .from('settings')
-                        .upsert(
-                          {
-                            business_id: DEFAULT_BUSINESS_ID,
-                            parallel_capacity: parallelCapacity,
-                            buffer_percentage: bufferPercentage,
-                          },
-                          { onConflict: 'business_id' }
-                        );
-                      if (error) {
-                        console.error('Error guardando configuración:', error.message);
-                      } else {
-                        setIsSettingsPanelOpen(false);
-                      }
-                    }}
-                    className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500"
-                  >
-                    Guardar
-                  </button>
+                  <div className="mt-6 flex items-center justify-end gap-3">
+                    {settingsSaved && (
+                      <span className="text-sm font-medium text-emerald-600">✓ Guardado</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => { setIsSettingsPanelOpen(false); setSettingsSaved(false); }}
+                      className="rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const supabase = createClient();
+                        const { error } = await supabase
+                          .from('settings')
+                          .upsert(
+                            {
+                              business_id: DEFAULT_BUSINESS_ID,
+                              parallel_capacity: parallelCapacity,
+                              buffer_percentage: bufferPercentage,
+                            },
+                            { onConflict: 'business_id' }
+                          );
+                        if (error) {
+                          console.error('Error guardando configuración:', error.message);
+                        } else {
+                          setSettingsSaved(true);
+                          setTimeout(() => {
+                            setSettingsSaved(false);
+                            setIsSettingsPanelOpen(false);
+                          }, 1500);
+                        }
+                      }}
+                      className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500"
+                    >
+                      Guardar
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -729,8 +739,9 @@ export default function CajeroPage() {
     </div>
 
       {isProductPanelOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-end bg-black/40 px-4 py-6 sm:items-center sm:justify-center">
-          <div className="w-full max-w-md rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40">
+          <div className="flex min-h-full items-end justify-center px-4 py-6 sm:items-center">
+          <div className="w-full max-w-lg rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-2xl font-semibold">Gestionar productos</h2>
@@ -748,24 +759,26 @@ export default function CajeroPage() {
             <div className="mt-6 space-y-6">
               <div className="space-y-3 rounded-3xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm font-semibold text-slate-700">Agregar producto</p>
-                <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-                  <input
-                    value={newProductName}
-                    onChange={(event) => setNewProductName(event.target.value)}
-                    className="rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-emerald-500"
-                    placeholder="Nombre del producto"
-                  />
-                  <input
-                    value={newProductMinutes}
-                    onChange={(event) => setNewProductMinutes(event.target.value)}
-                    className="rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-emerald-500"
-                    placeholder="Min"
-                    type="number"
-                  />
+                <div className="flex flex-col gap-2">
+                  <div className="flex gap-2">
+                    <input
+                      value={newProductName}
+                      onChange={(event) => setNewProductName(event.target.value)}
+                      className="min-w-0 flex-1 rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-emerald-500"
+                      placeholder="Nombre del producto"
+                    />
+                    <input
+                      value={newProductMinutes}
+                      onChange={(event) => setNewProductMinutes(event.target.value)}
+                      className="w-20 rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-emerald-500"
+                      placeholder="Min"
+                      type="number"
+                    />
+                  </div>
                   <button
                     type="button"
                     onClick={handleAddProduct}
-                    className="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
+                    className="w-full rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
                   >
                     Agregar
                   </button>
@@ -799,6 +812,7 @@ export default function CajeroPage() {
                 )}
               </div>
             </div>
+          </div>
           </div>
         </div>
       )}
