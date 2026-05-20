@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { APP_VERSION } from '@/lib/version'
 
 function TurnoContent() {
   const searchParams = useSearchParams()
@@ -281,6 +282,7 @@ function TurnoContent() {
               )}
             </div>
           )}
+        <p style={{marginTop:'1.5rem',textAlign:'center',color:'#475569',fontSize:'0.7rem',fontFamily:'monospace'}}>{APP_VERSION}</p>
         </div>
       </div>
     </div>

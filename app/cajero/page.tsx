@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/lib/supabase';
+import { APP_VERSION } from '@/lib/version';
 
 interface Turn {
   id: string;
@@ -446,7 +447,7 @@ export default function CajeroPage() {
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-3xl font-semibold">Panel del Cajero</h1>
-            <p className="text-sm text-slate-600">Gestiona productos y registra turnos con separación por negocio.</p>
+            <p className="text-sm text-slate-600">Gestiona productos y registra turnos con separación por negocio. <span className="font-mono text-slate-400">{APP_VERSION}</span></p>
           </div>
           <div className="flex flex-wrap gap-3">
             <button
