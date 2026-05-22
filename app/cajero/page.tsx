@@ -411,7 +411,7 @@ export default function CajeroPage() {
     }
   }
 
-  const recalcAfterRemoval = async (removedId: string) => {
+  const recalcAfterRemoval = async (removedCreatedAt: string) => {
     const supabase = createClient();
     const { data: allActive, error: activeError } = await supabase
       .from('turns')
@@ -425,31 +425,24 @@ export default function CajeroPage() {
       return;
     }
 
-    const removedOrigIndex = allActive.findIndex((t) => t.id === removedId);
-    if (removedOrigIndex < 0) return;
-
     const capacity = parallelCapacity || 2;
 
-    for (let origIndex = 0; origIndex < allActive.length; origIndex++) {
-      const turn = allActive[origIndex];
-      if (turn.id === removedId) continue;
+    for (let newIndex = 0; newIndex < allActive.length; newIndex++) {
+      const turn = allActive[newIndex];
       if (turn.status !== 'waiting') continue;
+      // Turnos anteriores al eliminado no cambian de posición
+      if (turn.created_at <= removedCreatedAt) continue;
 
-      // tiempoBase = el tiempo de preparación del propio plato (con colchón).
-      // Si el turno fue creado antes de la migración, fallback a derivarlo del estimated.
+      // Este turno estaba después del eliminado: su índice original era newIndex + 1
+      const origIndex = newIndex + 1;
       const origSlots = Math.floor(origIndex / capacity);
       const tiempoBase = turn.prep_minutes && turn.prep_minutes > 0
         ? turn.prep_minutes
         : turn.estimated_wait_minutes / (origSlots + 1);
 
-      // Nueva posición tras eliminar el turno
-      const newIndex = origIndex > removedOrigIndex ? origIndex - 1 : origIndex;
       const newSlots = Math.floor(newIndex / capacity);
       const calculado = Math.round(tiempoBase * (newSlots + 1));
 
-      // Piso: el remaining mostrado al cliente nunca puede ser menor que tiempoBase.
-      // remaining = nuevoTiempo*60 - elapsed  ≥  tiempoBase*60
-      // → nuevoTiempo ≥ tiempoBase + elapsed/60
       const elapsedSeconds = (Date.now() - new Date(turn.created_at).getTime()) / 1000;
       const pisoConElapsed = Math.ceil(tiempoBase + elapsedSeconds / 60);
       const nuevoTiempo = Math.max(calculado, pisoConElapsed);
@@ -463,6 +456,7 @@ export default function CajeroPage() {
 
   const updateTurnStatus = async (id: string, status: Turn['status']) => {
     const supabase = createClient();
+    const thisTurn = turns.find((t) => t.id === id);
 
     if (status === 'completed' || status === 'cancelled') {
       const updates: { status: Turn['status']; completed_at: string | null } = {
@@ -474,7 +468,7 @@ export default function CajeroPage() {
         console.error(error.message);
         return;
       }
-      await recalcAfterRemoval(id);
+      if (thisTurn) await recalcAfterRemoval(thisTurn.created_at);
     } else {
       const { error } = await supabase
         .from('turns')

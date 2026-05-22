@@ -23,6 +23,7 @@ function TurnoContent() {
   const expiryTimeRef = useRef<number>(0)
   const prevEstimatedRef = useRef<number>(0)
   const displayModeRef = useRef<'timer' | 'queue'>('timer')
+  const reachedZeroRef = useRef(false)
 
   const playAlert = () => {
     try {
@@ -58,7 +59,7 @@ function TurnoContent() {
       } else {
         const remaining = data.remainingSeconds || 0
         prevEstimatedRef.current = data.estimated_wait_minutes
-        if (remaining > 0) alertPlayedRef.current = false
+        if (remaining > 0 && !reachedZeroRef.current) alertPlayedRef.current = false
 
         const mode: 'timer' | 'queue' = data.displayMode || 'timer'
         displayModeRef.current = mode
@@ -69,7 +70,7 @@ function TurnoContent() {
           setCalledByStaff(true)
           expiryTimeRef.current = 0
           setTimeLeft(0)
-        } else {
+        } else if (!reachedZeroRef.current) {
           expiryTimeRef.current = Date.now() + remaining * 1000
           setTimeLeft(remaining)
         }
@@ -172,8 +173,10 @@ function TurnoContent() {
             ) {
               setDelayNotice(true)
             }
-            expiryTimeRef.current = Date.now() + newRemaining * 1000
-            setTimeLeft(Math.ceil(newRemaining))
+            if (!reachedZeroRef.current) {
+              expiryTimeRef.current = Date.now() + newRemaining * 1000
+              setTimeLeft(Math.ceil(newRemaining))
+            }
           }
           // completed/cancelled: no tocar el timer, debe quedar en cero
 
@@ -192,6 +195,7 @@ function TurnoContent() {
     const interval = setInterval(() => {
       if (expiryTimeRef.current === 0) return
       const left = Math.max(0, Math.ceil((expiryTimeRef.current - Date.now()) / 1000))
+      if (left === 0) reachedZeroRef.current = true
       setTimeLeft(left)
     }, 500)
     return () => clearInterval(interval)
