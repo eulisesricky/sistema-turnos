@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase';
+import { APP_VERSION } from '@/lib/version';
 
 interface Turn {
   id: string;
@@ -340,7 +341,7 @@ export default function TVPage() {
               <div className="overflow-hidden rounded-3xl bg-white p-3 shadow-xl">
                 <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`} alt="QR Code" className="block" />
               </div>
-              <p className="text-center text-lg font-semibold text-slate-200">Escanea para registrarte</p>
+              <p className="text-center text-lg font-semibold text-slate-200">Escanea Para Seguimiento De Turno</p>
               <p className="text-center text-lg font-bold text-white">{qrUrl}</p>
             </div>
           </aside>
@@ -352,9 +353,12 @@ export default function TVPage() {
               <p className="text-sm uppercase tracking-[0.35em] text-slate-400">Próximos turnos</p>
               <p className="mt-2 text-2xl font-semibold text-white">En espera</p>
             </div>
-            <span className="rounded-full bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-300">
-              {nextTurns.length} mostrados
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="rounded-full bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-300">
+                {nextTurns.length} mostrados
+              </span>
+              <span className="text-xs text-slate-500 font-mono">{APP_VERSION}</span>
+            </div>
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">

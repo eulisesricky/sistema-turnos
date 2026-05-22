@@ -28,6 +28,7 @@ create table settings (
   business_id uuid references businesses(id),
   parallel_capacity int not null default 2,
   buffer_percentage int not null default 20,
+  display_mode text not null default 'timer',
   created_at timestamptz not null default now()
 );
 create unique index idx_settings_business_id on settings (business_id);
@@ -49,6 +50,7 @@ create table turns (
   turn_number int not null,
   status turn_status not null default 'waiting',
   estimated_wait_minutes int not null default 0,
+  prep_minutes int not null default 0,
   token text not null unique,
   created_at timestamptz not null default now(),
   completed_at timestamptz

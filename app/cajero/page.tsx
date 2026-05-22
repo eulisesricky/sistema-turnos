@@ -1,8 +1,45 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase';
 import { APP_VERSION } from '@/lib/version';
+
+function useDraggable() {
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const dragging = useRef(false);
+  const start = useRef({ mx: 0, my: 0, px: 0, py: 0 });
+
+  const onPointerDown = (e: React.PointerEvent<HTMLElement>) => {
+    dragging.current = true;
+    start.current = { mx: e.clientX, my: e.clientY, px: pos.x, py: pos.y };
+    e.currentTarget.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  };
+
+  const onPointerMove = (e: React.PointerEvent<HTMLElement>) => {
+    if (!dragging.current) return;
+    setPos({
+      x: start.current.px + e.clientX - start.current.mx,
+      y: start.current.py + e.clientY - start.current.my,
+    });
+  };
+
+  const onPointerUp = () => { dragging.current = false; };
+
+  return {
+    dragHandleProps: { onPointerDown, onPointerMove, onPointerUp },
+    modalStyle: {
+      position: 'fixed' as const,
+      top: '50%',
+      left: '50%',
+      transform: `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))`,
+      zIndex: 51,
+      maxHeight: '90vh',
+      overflowY: 'auto' as const,
+    },
+    reset: () => setPos({ x: 0, y: 0 }),
+  };
+}
 
 interface Turn {
   id: string;
@@ -12,6 +49,7 @@ interface Turn {
   turn_number: string;
   status: 'waiting' | 'called' | 'completed' | 'cancelled';
   estimated_wait_minutes: number;
+  prep_minutes?: number | null;
   created_at: string;
 }
 
@@ -54,8 +92,11 @@ export default function CajeroPage() {
   const [isProductPanelOpen, setIsProductPanelOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
+  const settingsDrag = useDraggable();
+  const productDrag = useDraggable();
   const [parallelCapacity, setParallelCapacity] = useState(2);
   const [bufferPercentage, setBufferPercentage] = useState(20);
+  const [displayMode, setDisplayMode] = useState<'timer' | 'queue'>('timer');
   const [currentTime, setCurrentTime] = useState(Date.now());
   const selectedItems = useMemo(
     () => products.filter((product) => selectedProducts.includes(product.id)),
@@ -107,7 +148,7 @@ export default function CajeroPage() {
     const supabase = createClient();
     const { data, error } = await supabase
       .from('turns')
-      .select('id, customer_name, whatsapp, pin, turn_number, status, created_at, estimated_wait_minutes')
+      .select('id, customer_name, whatsapp, pin, turn_number, status, created_at, estimated_wait_minutes, prep_minutes')
       .eq('business_id', DEFAULT_BUSINESS_ID)
       .in('status', ['waiting', 'called'])
       .order('created_at', { ascending: true });
@@ -140,7 +181,7 @@ export default function CajeroPage() {
     const supabase = createClient();
     const { data, error } = await supabase
       .from('settings')
-      .select('parallel_capacity, buffer_percentage')
+      .select('parallel_capacity, buffer_percentage, display_mode')
       .eq('business_id', DEFAULT_BUSINESS_ID)
       .limit(1)
       .maybeSingle();
@@ -153,6 +194,7 @@ export default function CajeroPage() {
     if (data) {
       setParallelCapacity(data.parallel_capacity ?? 2);
       setBufferPercentage(data.buffer_percentage ?? 20);
+      setDisplayMode((data.display_mode as 'timer' | 'queue') ?? 'timer');
     }
   };
 
@@ -302,9 +344,10 @@ export default function CajeroPage() {
     const buffer = bufferPercentage || 20;
     const tiempoProducto = estimatedMinutes;
     const tiempoBase = tiempoProducto * (1 + buffer / 100);
+    const prepMinutes = Math.max(1, Math.ceil(tiempoBase));
     const turnosEnCola = turnosActivos?.length || 0;
     const turnosEsperando = Math.floor(turnosEnCola / capacity);
-    const tiempoFinal = Math.round(tiempoBase + turnosEsperando * tiempoBase);
+    const tiempoFinal = Math.max(prepMinutes, Math.round(tiempoBase + turnosEsperando * tiempoBase));
 
     const sequenceNumber = (count ?? 0) + 1;
     const turnNumber = `${selectedCode}${String(sequenceNumber).padStart(3, '0')}`;
@@ -319,6 +362,7 @@ export default function CajeroPage() {
         turn_number: turnNumber,
         status: 'waiting',
         estimated_wait_minutes: tiempoFinal,
+        prep_minutes: prepMinutes,
         token,
         queue_id: DEFAULT_QUEUE_ID,
         business_id: DEFAULT_BUSINESS_ID,
@@ -342,7 +386,10 @@ export default function CajeroPage() {
 
   const adjustTurnTime = async (id: string, deltaMinutes: number, currentEstimated: number) => {
     const supabase = createClient()
-    const newEstimated = Math.max(1, Math.round(currentEstimated + deltaMinutes))
+    const thisTurn = turns.find((t) => t.id === id)
+    // Piso: el ajuste nunca puede bajar el estimado por debajo del prep_minutes del turno
+    const piso = thisTurn?.prep_minutes && thisTurn.prep_minutes > 0 ? thisTurn.prep_minutes : 1
+    const newEstimated = Math.max(piso, Math.round(currentEstimated + deltaMinutes))
     const { error } = await supabase
       .from('turns')
       .update({ estimated_wait_minutes: newEstimated })
@@ -350,13 +397,13 @@ export default function CajeroPage() {
     if (error) { console.error('Error al ajustar tiempo:', error.message); return }
 
     // Cascade: sumar el mismo delta a todos los turnos en espera posteriores
-    const thisTurn = turns.find((t) => t.id === id)
     if (!thisTurn) return
     const subsequent = turns.filter(
       (t) => t.status === 'waiting' && t.created_at > thisTurn.created_at
     )
     for (const turn of subsequent) {
-      const newEst = Math.max(1, Math.round(turn.estimated_wait_minutes + deltaMinutes))
+      const pisoTurn = turn.prep_minutes && turn.prep_minutes > 0 ? turn.prep_minutes : 1
+      const newEst = Math.max(pisoTurn, Math.round(turn.estimated_wait_minutes + deltaMinutes))
       await supabase
         .from('turns')
         .update({ estimated_wait_minutes: newEst })
@@ -364,65 +411,70 @@ export default function CajeroPage() {
     }
   }
 
+  const recalcAfterRemoval = async (removedId: string) => {
+    const supabase = createClient();
+    const { data: allActive, error: activeError } = await supabase
+      .from('turns')
+      .select('id, estimated_wait_minutes, prep_minutes, status, created_at')
+      .eq('business_id', DEFAULT_BUSINESS_ID)
+      .in('status', ['waiting', 'called'])
+      .order('created_at', { ascending: true });
+
+    if (activeError || !allActive) {
+      console.error('Error al obtener turnos activos:', activeError?.message);
+      return;
+    }
+
+    const removedOrigIndex = allActive.findIndex((t) => t.id === removedId);
+    if (removedOrigIndex < 0) return;
+
+    const capacity = parallelCapacity || 2;
+
+    for (let origIndex = 0; origIndex < allActive.length; origIndex++) {
+      const turn = allActive[origIndex];
+      if (turn.id === removedId) continue;
+      if (turn.status !== 'waiting') continue;
+
+      // tiempoBase = el tiempo de preparación del propio plato (con colchón).
+      // Si el turno fue creado antes de la migración, fallback a derivarlo del estimated.
+      const origSlots = Math.floor(origIndex / capacity);
+      const tiempoBase = turn.prep_minutes && turn.prep_minutes > 0
+        ? turn.prep_minutes
+        : turn.estimated_wait_minutes / (origSlots + 1);
+
+      // Nueva posición tras eliminar el turno
+      const newIndex = origIndex > removedOrigIndex ? origIndex - 1 : origIndex;
+      const newSlots = Math.floor(newIndex / capacity);
+      const calculado = Math.round(tiempoBase * (newSlots + 1));
+
+      // Piso: el remaining mostrado al cliente nunca puede ser menor que tiempoBase.
+      // remaining = nuevoTiempo*60 - elapsed  ≥  tiempoBase*60
+      // → nuevoTiempo ≥ tiempoBase + elapsed/60
+      const elapsedSeconds = (Date.now() - new Date(turn.created_at).getTime()) / 1000;
+      const pisoConElapsed = Math.ceil(tiempoBase + elapsedSeconds / 60);
+      const nuevoTiempo = Math.max(calculado, pisoConElapsed);
+
+      await supabase
+        .from('turns')
+        .update({ estimated_wait_minutes: nuevoTiempo })
+        .eq('id', turn.id);
+    }
+  };
+
   const updateTurnStatus = async (id: string, status: Turn['status']) => {
     const supabase = createClient();
 
-    if (status === 'completed') {
-      // Snapshot the queue BEFORE completing to know each turn's original position
-      const { data: allActive, error: activeError } = await supabase
-        .from('turns')
-        .select('id, estimated_wait_minutes, status, created_at')
-        .eq('business_id', DEFAULT_BUSINESS_ID)
-        .in('status', ['waiting', 'called'])
-        .order('created_at', { ascending: true });
-
-      if (activeError) {
-        console.error('Error al obtener turnos activos:', activeError.message);
-        return;
-      }
-
-      const completedOrigIndex = allActive?.findIndex((t) => t.id === id) ?? -1;
-
-      const { error } = await supabase
-        .from('turns')
-        .update({ status: 'completed', completed_at: new Date().toISOString() })
-        .eq('id', id);
-
+    if (status === 'completed' || status === 'cancelled') {
+      const updates: { status: Turn['status']; completed_at: string | null } = {
+        status,
+        completed_at: status === 'completed' ? new Date().toISOString() : null,
+      };
+      const { error } = await supabase.from('turns').update(updates).eq('id', id);
       if (error) {
         console.error(error.message);
         return;
       }
-
-      if (completedOrigIndex >= 0 && allActive) {
-        const capacity = parallelCapacity || 2;
-
-        for (let origIndex = 0; origIndex < allActive.length; origIndex++) {
-          const turn = allActive[origIndex];
-          if (turn.id === id) continue;
-          if (turn.status !== 'waiting') continue;
-
-          // Tiempo base = lo que le corresponde a este turno solo (con colchón)
-          const origSlots = Math.floor(origIndex / capacity);
-          const tiempoBase = turn.estimated_wait_minutes / (origSlots + 1);
-
-          // Nueva posición tras eliminar el turno completado
-          const newIndex = origIndex > completedOrigIndex ? origIndex - 1 : origIndex;
-          const newSlots = Math.floor(newIndex / capacity);
-          const calculado = Math.round(tiempoBase * (newSlots + 1));
-
-          // Piso: el tiempo restante nunca puede ser menor que tiempoBase.
-          // remaining = nuevoTiempo*60 - elapsed  ≥  tiempoBase*60
-          // → nuevoTiempo ≥ tiempoBase + elapsed/60
-          const elapsedSeconds = (Date.now() - new Date(turn.created_at).getTime()) / 1000;
-          const pisoConElapsed = Math.ceil(tiempoBase + elapsedSeconds / 60);
-          const nuevoTiempo = Math.max(calculado, pisoConElapsed);
-
-          await supabase
-            .from('turns')
-            .update({ estimated_wait_minutes: nuevoTiempo })
-            .eq('id', turn.id);
-        }
-      }
+      await recalcAfterRemoval(id);
     } else {
       const { error } = await supabase
         .from('turns')
@@ -569,89 +621,123 @@ export default function CajeroPage() {
           </section>
 
           {isSettingsPanelOpen && (
-            <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 p-4">
-              <div className="flex min-h-full items-center justify-center">
-                <div className="w-full max-w-xl rounded-[2rem] bg-white p-6 shadow-2xl">
-                  <div className="mb-5 flex items-center justify-between">
-                    <div>
-                      <h2 className="text-2xl font-semibold">Configuración</h2>
-                      <p className="text-sm text-slate-500">Ajusta la capacidad y el colchón de tiempo.</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => { setIsSettingsPanelOpen(false); setSettingsSaved(false); }}
-                      className="text-slate-500 transition hover:text-slate-900"
-                    >
-                      Cerrar
-                    </button>
+            <>
+              <div
+                className="fixed inset-0 z-50 bg-slate-950/80"
+                onClick={() => { setIsSettingsPanelOpen(false); setSettingsSaved(false); settingsDrag.reset(); }}
+              />
+              <div
+                className="w-full max-w-xl rounded-[2rem] bg-white p-6 shadow-2xl"
+                style={settingsDrag.modalStyle}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div
+                  className="mb-5 flex cursor-grab items-center justify-between select-none rounded-xl px-1 py-1 hover:bg-slate-50 active:cursor-grabbing"
+                  {...settingsDrag.dragHandleProps}
+                >
+                  <div>
+                    <p className="text-xs text-slate-400 mb-1">⠿ Arrastra para mover</p>
+                    <h2 className="text-2xl font-semibold">Configuración</h2>
+                    <p className="text-sm text-slate-500">Ajusta la capacidad y el colchón de tiempo.</p>
                   </div>
+                  <button
+                    type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={() => { setIsSettingsPanelOpen(false); setSettingsSaved(false); settingsDrag.reset(); }}
+                    className="cursor-pointer text-slate-500 transition hover:text-slate-900"
+                  >
+                    Cerrar
+                  </button>
+                </div>
 
-                  <div className="grid gap-5">
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-700">Órdenes simultáneas</label>
-                      <input
-                        type="number"
-                        min={1}
-                        value={parallelCapacity}
-                        onChange={(event) => setParallelCapacity(Number(event.target.value))}
-                        className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-base outline-none transition focus:border-emerald-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-700">Colchón de tiempo %</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={bufferPercentage}
-                        onChange={(event) => setBufferPercentage(Number(event.target.value))}
-                        className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-base outline-none transition focus:border-emerald-500"
-                      />
-                    </div>
+                <div className="grid gap-5">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">Órdenes simultáneas</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={parallelCapacity}
+                      onChange={(event) => setParallelCapacity(Number(event.target.value))}
+                      className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-base outline-none transition focus:border-emerald-500"
+                    />
                   </div>
-
-                  <div className="mt-6 flex items-center justify-end gap-3">
-                    {settingsSaved && (
-                      <span className="text-sm font-medium text-emerald-600">✓ Guardado</span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => { setIsSettingsPanelOpen(false); setSettingsSaved(false); }}
-                      className="rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const supabase = createClient();
-                        const { error } = await supabase
-                          .from('settings')
-                          .upsert(
-                            {
-                              business_id: DEFAULT_BUSINESS_ID,
-                              parallel_capacity: parallelCapacity,
-                              buffer_percentage: bufferPercentage,
-                            },
-                            { onConflict: 'business_id' }
-                          );
-                        if (error) {
-                          console.error('Error guardando configuración:', error.message);
-                        } else {
-                          setSettingsSaved(true);
-                          setTimeout(() => {
-                            setSettingsSaved(false);
-                            setIsSettingsPanelOpen(false);
-                          }, 1500);
-                        }
-                      }}
-                      className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500"
-                    >
-                      Guardar
-                    </button>
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">Colchón de tiempo %</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={bufferPercentage}
+                      onChange={(event) => setBufferPercentage(Number(event.target.value))}
+                      className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-base outline-none transition focus:border-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-3 block text-sm font-medium text-slate-700">Vista del cliente</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setDisplayMode('timer')}
+                        className={`rounded-2xl border-2 px-4 py-3 text-sm font-semibold transition ${displayMode === 'timer' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}
+                      >
+                        ⏱ Temporizador
+                        <p className="mt-1 text-xs font-normal text-slate-400">Cuenta regresiva</p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDisplayMode('queue')}
+                        className={`rounded-2xl border-2 px-4 py-3 text-sm font-semibold transition ${displayMode === 'queue' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}
+                      >
+                        🔢 Posición en cola
+                        <p className="mt-1 text-xs font-normal text-slate-400">Turnos restantes</p>
+                      </button>
+                    </div>
                   </div>
                 </div>
+
+                <div className="mt-6 flex items-center justify-end gap-3">
+                  {settingsSaved && (
+                    <span className="text-sm font-medium text-emerald-600">✓ Guardado</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => { setIsSettingsPanelOpen(false); setSettingsSaved(false); settingsDrag.reset(); }}
+                    className="rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const supabase = createClient();
+                      const { error } = await supabase
+                        .from('settings')
+                        .upsert(
+                          {
+                            business_id: DEFAULT_BUSINESS_ID,
+                            parallel_capacity: parallelCapacity,
+                            buffer_percentage: bufferPercentage,
+                            display_mode: displayMode,
+                          },
+                          { onConflict: 'business_id' }
+                        );
+                      if (error) {
+                        console.error('Error guardando configuración:', error.message);
+                      } else {
+                        setSettingsSaved(true);
+                        setTimeout(() => {
+                          setSettingsSaved(false);
+                          setIsSettingsPanelOpen(false);
+                          settingsDrag.reset();
+                        }, 1500);
+                      }
+                    }}
+                    className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500"
+                  >
+                    Guardar
+                  </button>
+                </div>
               </div>
-            </div>
+            </>
           )}
 
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -739,18 +825,30 @@ export default function CajeroPage() {
     </div>
 
       {isProductPanelOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40">
-          <div className="flex min-h-full items-end justify-center px-4 py-6 sm:items-center">
-          <div className="w-full max-w-lg rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl">
-            <div className="flex items-center justify-between">
+        <>
+          <div
+            className="fixed inset-0 z-50 bg-black/40"
+            onClick={() => { setIsProductPanelOpen(false); productDrag.reset(); }}
+          />
+          <div
+            className="w-full max-w-lg rounded-[2rem] bg-white p-6 shadow-2xl"
+            style={productDrag.modalStyle}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="flex cursor-grab items-center justify-between select-none rounded-xl px-1 py-1 hover:bg-slate-50 active:cursor-grabbing"
+              {...productDrag.dragHandleProps}
+            >
               <div>
+                <p className="text-xs text-slate-400 mb-1">⠿ Arrastra para mover</p>
                 <h2 className="text-2xl font-semibold">Gestionar productos</h2>
                 <p className="text-sm text-slate-500">Agrega, elimina y revisa tus productos.</p>
               </div>
               <button
                 type="button"
-                onClick={() => setIsProductPanelOpen(false)}
-                className="rounded-full bg-slate-100 p-2 text-slate-700 transition hover:bg-slate-200"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => { setIsProductPanelOpen(false); productDrag.reset(); }}
+                className="cursor-pointer rounded-full bg-slate-100 p-2 text-slate-700 transition hover:bg-slate-200"
               >
                 ✕
               </button>
@@ -813,8 +911,7 @@ export default function CajeroPage() {
               </div>
             </div>
           </div>
-          </div>
-        </div>
+        </>
       )}
     </div>
   )
