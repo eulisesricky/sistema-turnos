@@ -92,6 +92,7 @@ export default function CajeroPage() {
   const [isProductPanelOpen, setIsProductPanelOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
   const settingsDrag = useDraggable();
   const productDrag = useDraggable();
   const [parallelCapacity, setParallelCapacity] = useState(2);
@@ -495,11 +496,11 @@ export default function CajeroPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 p-6">
-      {settingsSaved && (
+      {(settingsSaved || settingsError) && (
         <div
           style={{
             position: 'fixed', top: '1.5rem', left: '50%', transform: 'translateX(-50%)',
-            zIndex: 9999, background: '#16a34a', color: 'white',
+            zIndex: 9999, background: settingsError ? '#dc2626' : '#16a34a', color: 'white',
             padding: '1rem 2rem', borderRadius: '1rem',
             boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
             fontSize: '1.05rem', fontWeight: 700,
@@ -507,7 +508,7 @@ export default function CajeroPage() {
             whiteSpace: 'nowrap',
           }}
         >
-          ✓ Configuración guardada correctamente
+          {settingsError ? `✗ Error: ${settingsError}` : '✓ Configuración guardada correctamente'}
         </div>
       )}
       <div className="mx-auto max-w-6xl space-y-8">
@@ -638,7 +639,7 @@ export default function CajeroPage() {
             <>
               <div
                 className="fixed inset-0 z-50 bg-slate-950/80"
-                onClick={() => { setIsSettingsPanelOpen(false); setSettingsSaved(false); settingsDrag.reset(); }}
+                onClick={() => { setIsSettingsPanelOpen(false); setSettingsSaved(false); setSettingsError(null); settingsDrag.reset(); }}
               />
               <div
                 className="w-full max-w-xl rounded-[2rem] bg-white p-6 shadow-2xl"
@@ -657,7 +658,7 @@ export default function CajeroPage() {
                   <button
                     type="button"
                     onPointerDown={(e) => e.stopPropagation()}
-                    onClick={() => { setIsSettingsPanelOpen(false); setSettingsSaved(false); settingsDrag.reset(); }}
+                    onClick={() => { setIsSettingsPanelOpen(false); setSettingsSaved(false); setSettingsError(null); settingsDrag.reset(); }}
                     className="cursor-pointer text-slate-500 transition hover:text-slate-900"
                   >
                     Cerrar
@@ -712,7 +713,7 @@ export default function CajeroPage() {
                   <div className="flex items-center justify-end gap-3">
                   <button
                     type="button"
-                    onClick={() => { setIsSettingsPanelOpen(false); setSettingsSaved(false); settingsDrag.reset(); }}
+                    onClick={() => { setIsSettingsPanelOpen(false); setSettingsSaved(false); setSettingsError(null); settingsDrag.reset(); }}
                     className="rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
                   >
                     Cerrar
@@ -720,25 +721,33 @@ export default function CajeroPage() {
                   <button
                     type="button"
                     onClick={async () => {
-                      const supabase = createClient();
-                      const { error } = await supabase
-                        .from('settings')
-                        .upsert(
-                          {
-                            business_id: DEFAULT_BUSINESS_ID,
-                            parallel_capacity: parallelCapacity,
-                            buffer_percentage: bufferPercentage,
-                            display_mode: displayMode,
-                          },
-                          { onConflict: 'business_id' }
-                        );
-                      if (error) {
-                        console.error('Error guardando configuración:', error.message);
-                      } else {
-                        setSettingsSaved(true);
-                        setTimeout(() => {
-                          setSettingsSaved(false);
-                        }, 3000);
+                      setSettingsError(null);
+                      setSettingsSaved(false);
+                      try {
+                        const supabase = createClient();
+                        const { error } = await supabase
+                          .from('settings')
+                          .upsert(
+                            {
+                              business_id: DEFAULT_BUSINESS_ID,
+                              parallel_capacity: parallelCapacity,
+                              buffer_percentage: bufferPercentage,
+                              display_mode: displayMode,
+                            },
+                            { onConflict: 'business_id' }
+                          );
+                        if (error) {
+                          console.error('Error guardando configuración:', error.message);
+                          setSettingsError(error.message);
+                          setTimeout(() => setSettingsError(null), 5000);
+                        } else {
+                          setSettingsSaved(true);
+                          setTimeout(() => setSettingsSaved(false), 3000);
+                        }
+                      } catch (e: any) {
+                        console.error('Excepción guardando configuración:', e);
+                        setSettingsError(e?.message ?? 'desconocido');
+                        setTimeout(() => setSettingsError(null), 5000);
                       }
                     }}
                     className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500"
