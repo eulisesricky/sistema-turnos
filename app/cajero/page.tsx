@@ -495,6 +495,21 @@ export default function CajeroPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 p-6">
+      {settingsSaved && (
+        <div
+          style={{
+            position: 'fixed', top: '1.5rem', left: '50%', transform: 'translateX(-50%)',
+            zIndex: 9999, background: '#16a34a', color: 'white',
+            padding: '1rem 2rem', borderRadius: '1rem',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
+            fontSize: '1.05rem', fontWeight: 700,
+            display: 'flex', alignItems: 'center', gap: '0.6rem',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          ✓ Configuración guardada correctamente
+        </div>
+      )}
       <div className="mx-auto max-w-6xl space-y-8">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -693,12 +708,7 @@ export default function CajeroPage() {
                   </div>
                 </div>
 
-                <div className="mt-6 space-y-3">
-                  {settingsSaved && (
-                    <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-700">
-                      ✓ Configuración guardada correctamente
-                    </div>
-                  )}
+                <div className="mt-6">
                   <div className="flex items-center justify-end gap-3">
                   <button
                     type="button"
