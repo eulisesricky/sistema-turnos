@@ -693,16 +693,19 @@ export default function CajeroPage() {
                   </div>
                 </div>
 
-                <div className="mt-6 flex items-center justify-end gap-3">
+                <div className="mt-6 space-y-3">
                   {settingsSaved && (
-                    <span className="text-sm font-medium text-emerald-600">✓ Guardado</span>
+                    <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-700">
+                      ✓ Configuración guardada correctamente
+                    </div>
                   )}
+                  <div className="flex items-center justify-end gap-3">
                   <button
                     type="button"
                     onClick={() => { setIsSettingsPanelOpen(false); setSettingsSaved(false); settingsDrag.reset(); }}
                     className="rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
                   >
-                    Cancelar
+                    Cerrar
                   </button>
                   <button
                     type="button"
@@ -725,9 +728,7 @@ export default function CajeroPage() {
                         setSettingsSaved(true);
                         setTimeout(() => {
                           setSettingsSaved(false);
-                          setIsSettingsPanelOpen(false);
-                          settingsDrag.reset();
-                        }, 1500);
+                        }, 3000);
                       }
                     }}
                     className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500"
@@ -735,6 +736,7 @@ export default function CajeroPage() {
                     Guardar
                   </button>
                 </div>
+              </div>
               </div>
             </>
           )}
