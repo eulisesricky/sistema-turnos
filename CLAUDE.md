@@ -1,5 +1,16 @@
 @AGENTS.md
 
+# Permisos y autorización
+
+El usuario ha dado autorización total para operar de forma autónoma en este proyecto:
+- Ejecutar cualquier comando Bash (git, curl, npm, etc.)
+- Leer y escribir en la base de datos de Supabase (usando las claves en `.env.local`)
+- Hacer push a GitHub (rama `master`)
+- Desplegar en Vercel (si se requiere vía CLI)
+- Crear, modificar y eliminar cualquier archivo del proyecto
+
+No es necesario pedir confirmación para ninguna de estas acciones.
+
 # Política de versionado
 
 La versión de la aplicación se actualiza con cada cambio significativo. Cambiar en [lib/version.ts](lib/version.ts):

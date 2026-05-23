@@ -285,22 +285,29 @@ function TurnoContent() {
             </>
           ) : (
             <>
-              <p style={{color:'#4ade80',letterSpacing:'0.2em',fontSize:'0.7rem',marginBottom:'1rem'}}>POSICIÓN EN COLA</p>
               {turnsAhead === 0 ? (
                 <div style={{padding:'1.5rem',background:'#064e3b',borderRadius:'1rem',color:'white',border:'2px solid #10b981',marginBottom:'0.5rem'}}>
                   <p style={{fontSize:'2.2rem',fontWeight:'900',margin:'0 0 0.4rem 0'}}>¡ES TU TURNO!</p>
                   <p style={{fontSize:'0.95rem',margin:'0',color:'#6ee7b7'}}>Acércate al mostrador a retirar tu pedido</p>
                 </div>
-              ) : turnsAhead === 1 ? (
-                <div style={{padding:'1.5rem',background:'#451a03',borderRadius:'1rem',color:'white',border:'2px solid #f59e0b',marginBottom:'0.5rem'}}>
-                  <p style={{fontSize:'1.6rem',fontWeight:'900',margin:'0 0 0.4rem 0'}}>🚶 ¡Solo 1 turno delante!</p>
-                  <p style={{fontSize:'0.95rem',margin:'0',color:'#fcd34d'}}>Ve acercándote al mostrador</p>
-                </div>
               ) : (
-                <div style={{marginBottom:'0.5rem'}}>
-                  <p style={{fontSize:'3.5rem',fontWeight:'900',color:'#4ade80',margin:'0 0 0.25rem 0'}}>{turnsAhead}</p>
-                  <p style={{fontSize:'1rem',color:'#94a3b8',margin:'0'}}>turnos restantes delante de ti</p>
-                </div>
+                <>
+                  <p style={{color:'#4ade80',letterSpacing:'0.2em',fontSize:'0.75rem',marginBottom:'0.75rem'}}>TURNO(S) DELANTE</p>
+                  <p style={{
+                    fontSize:'4.5rem',
+                    fontWeight:'900',
+                    color: turnsAhead === 1 ? '#fbbf24' : '#4ade80',
+                    margin:'0 0 0.25rem 0',
+                    lineHeight:'1'
+                  }}>{turnsAhead}</p>
+                  {turnsAhead === 1 && (
+                    <div style={{marginTop:'1.25rem',padding:'1rem 1.5rem',background:'#451a03',borderRadius:'1rem',border:'1px solid #f59e0b'}}>
+                      <p style={{fontSize:'1rem',fontWeight:'600',margin:'0',color:'#fcd34d'}}>
+                        Vaya acercándose, usted será el próximo
+                      </p>
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}
