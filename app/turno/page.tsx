@@ -111,6 +111,12 @@ function TurnoContent() {
       return
     }
 
+    // Restaurar estado "llegó a cero" tras recarga de página
+    if (localStorage.getItem(`turno_zero_${token}`)) {
+      reachedZeroRef.current = true
+      setTimeLeft(0)
+    }
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') fetchData()
     }
@@ -195,7 +201,10 @@ function TurnoContent() {
     const interval = setInterval(() => {
       if (expiryTimeRef.current === 0) return
       const left = Math.max(0, Math.ceil((expiryTimeRef.current - Date.now()) / 1000))
-      if (left === 0) reachedZeroRef.current = true
+      if (left === 0) {
+        reachedZeroRef.current = true
+        if (token) localStorage.setItem(`turno_zero_${token}`, '1')
+      }
       setTimeLeft(left)
     }, 500)
     return () => clearInterval(interval)
