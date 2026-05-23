@@ -82,10 +82,17 @@ function TurnoContent() {
         setDisplayMode(mode)
         setTurnsAhead(data.turnsAhead ?? 0)
 
-        if (data.status === 'called') {
-          setCalledByStaff(true)
+        const lockZero = () => {
+          reachedZeroRef.current = true
+          if (token) localStorage.setItem(`turno_zero_${token}`, '1')
           expiryTimeRef.current = 0
           setTimeLeft(0)
+        }
+        if (data.status === 'called') {
+          setCalledByStaff(true)
+          lockZero()
+        } else if (data.status === 'completed' || data.status === 'cancelled') {
+          lockZero()
         } else if (!reachedZeroRef.current) {
           expiryTimeRef.current = Date.now() + remaining * 1000
           setTimeLeft(remaining)
@@ -106,10 +113,12 @@ function TurnoContent() {
           const data = JSON.parse(cached)
           const elapsed = Math.floor((Date.now() - data.cachedAt) / 1000)
           const remaining = Math.max(0, (data.remainingSeconds || 0) - elapsed)
-          expiryTimeRef.current = Date.now() + remaining * 1000
           prevEstimatedRef.current = data.estimated_wait_minutes
           setTurno(data)
-          setTimeLeft(remaining)
+          if (!reachedZeroRef.current) {
+            expiryTimeRef.current = Date.now() + remaining * 1000
+            setTimeLeft(remaining)
+          }
         } catch {
           setError('Sin conexión a internet.')
         }
@@ -181,12 +190,17 @@ function TurnoContent() {
           const wasIncrease = prevEstimatedRef.current > 0 &&
             updated.estimated_wait_minutes > prevEstimatedRef.current
 
-          if (updated.status === 'called') {
-            // Cajero llamó el turno antes de que el tiempo llegara a cero
-            setCalledByStaff(true)
-            setDelayNotice(false)
+          const rtLockZero = () => {
+            reachedZeroRef.current = true
+            if (token) localStorage.setItem(`turno_zero_${token}`, '1')
             expiryTimeRef.current = 0
             setTimeLeft(0)
+          }
+
+          if (updated.status === 'called') {
+            setCalledByStaff(true)
+            setDelayNotice(false)
+            rtLockZero()
             if (!alertPlayedRef.current) {
               alertPlayedRef.current = true
               playAlert()
@@ -209,7 +223,8 @@ function TurnoContent() {
             }
             setTurno((prev: any) => ({ ...prev, ...updated, remainingSeconds: naturalRemaining }))
           } else {
-            // completed/cancelled: no tocar el timer, debe quedar en cero
+            // completed/cancelled: fijar en cero y nunca más reiniciar
+            rtLockZero()
             prevEstimatedRef.current = updated.estimated_wait_minutes
             setTurno((prev: any) => ({ ...prev, ...updated }))
           }
