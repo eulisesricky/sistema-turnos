@@ -247,11 +247,12 @@ function TurnoContent() {
   }
 
   useEffect(() => {
+    if (displayMode !== 'timer') return
     if (timeLeft === 0 && audioActive && !alertPlayedRef.current) {
       alertPlayedRef.current = true
       playAlert()
     }
-  }, [timeLeft, audioActive])
+  }, [timeLeft, audioActive, displayMode])
 
   useEffect(() => {
     if (!audioActive || displayMode !== 'queue') return
