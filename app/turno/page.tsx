@@ -20,33 +20,49 @@ function TurnoContent() {
   const [turnsAhead, setTurnsAhead] = useState(0)
   const audioContextRef = useRef<AudioContext | null>(null)
   const alertPlayedRef = useRef(false)
+  const queueAlertedRef = useRef<Set<number>>(new Set())
   const expiryTimeRef = useRef<number>(0)
   const prevEstimatedRef = useRef<number>(0)
   const displayModeRef = useRef<'timer' | 'queue'>('timer')
   const reachedZeroRef = useRef(false)
 
-  const playAlert = () => {
+  const playBeeps = (count: number, freq: number, gain: number, duration: number, gap: number) => {
     try {
       const ctx = audioContextRef.current
       if (!ctx) return
       let time = ctx.currentTime
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < count; i++) {
         const osc = ctx.createOscillator()
-        const gain = ctx.createGain()
-        osc.connect(gain)
-        gain.connect(ctx.destination)
-        osc.frequency.value = 880
+        const g = ctx.createGain()
+        osc.connect(g)
+        g.connect(ctx.destination)
+        osc.frequency.value = freq
         osc.type = 'sine'
-        gain.gain.setValueAtTime(0.4, time)
-        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.4)
+        g.gain.setValueAtTime(gain, time)
+        g.gain.exponentialRampToValueAtTime(0.001, time + duration)
         osc.start(time)
-        osc.stop(time + 0.4)
-        time += 0.6
-      }
-      if (navigator.vibrate) {
-        navigator.vibrate([400, 200, 400, 200, 400, 200, 400, 200, 400])
+        osc.stop(time + duration)
+        time += gap
       }
     } catch {}
+  }
+
+  // Timer mode: 5 pitidos medios — tiempo llegó a cero
+  const playAlert = () => {
+    playBeeps(5, 880, 0.4, 0.4, 0.6)
+    if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 400, 200, 400, 200, 400])
+  }
+
+  // Cola: 3 pitidos suaves — queda 1 turno delante
+  const playWarningAlert = () => {
+    playBeeps(3, 660, 0.25, 0.3, 0.5)
+    if (navigator.vibrate) navigator.vibrate([300, 200, 300, 200, 300])
+  }
+
+  // Cola: 8 pitidos fuertes — es su turno (0 delante)
+  const playTurnAlert = () => {
+    playBeeps(8, 880, 0.55, 0.4, 0.52)
+    if (navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400, 150, 400, 150, 400, 150, 400, 150, 400, 150, 400])
   }
 
   const fetchData = useCallback(async () => {
@@ -237,6 +253,17 @@ function TurnoContent() {
     }
   }, [timeLeft, audioActive])
 
+  useEffect(() => {
+    if (!audioActive || displayMode !== 'queue') return
+    if (turnsAhead === 1 && !queueAlertedRef.current.has(1)) {
+      queueAlertedRef.current.add(1)
+      playWarningAlert()
+    } else if (turnsAhead === 0 && !queueAlertedRef.current.has(0)) {
+      queueAlertedRef.current.add(0)
+      playTurnAlert()
+    }
+  }, [turnsAhead, audioActive, displayMode])
+
   const mins = String(Math.floor(timeLeft / 60)).padStart(2, '0')
   const secs = String(Math.floor(timeLeft % 60)).padStart(2, '0')
 
@@ -308,6 +335,16 @@ function TurnoContent() {
                     </div>
                   )}
                 </>
+              )}
+              {!audioActive && (
+                <button
+                  onClick={handleActivateAudio}
+                  style={{marginTop:'2rem',padding:'0.75rem 1.5rem',background:'#3b82f6',color:'white',border:'none',borderRadius:'0.5rem',fontSize:'1rem',fontWeight:'600',cursor:'pointer',transition:'background 0.3s'}}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = '#2563eb')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = '#3b82f6')}
+                >
+                  🔔 Activar alerta sonora
+                </button>
               )}
             </>
           )}
