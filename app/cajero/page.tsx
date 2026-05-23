@@ -436,11 +436,16 @@ export default function CajeroPage() {
       // Este turno estaba después del eliminado: su índice original era newIndex + 1
       const origIndex = newIndex + 1;
       const origSlots = Math.floor(origIndex / capacity);
+      const newSlots = Math.floor(newIndex / capacity);
+
+      // Si el turno NO cambia de slot (sigue paralelo en el mismo batch),
+      // no recalcular: su prep ya está corriendo desde su creación.
+      if (newSlots === origSlots) continue;
+
       const tiempoBase = turn.prep_minutes && turn.prep_minutes > 0
         ? turn.prep_minutes
         : turn.estimated_wait_minutes / (origSlots + 1);
 
-      const newSlots = Math.floor(newIndex / capacity);
       const calculado = Math.round(tiempoBase * (newSlots + 1));
 
       const elapsedSeconds = (Date.now() - new Date(turn.created_at).getTime()) / 1000;

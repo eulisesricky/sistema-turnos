@@ -30,21 +30,25 @@ export async function GET(request: NextRequest) {
 
   const turnsAhead = turnsAheadCount ?? 0
 
-  // Piso: si hay turnos delante, remaining nunca baja del tiempo de preparación del propio plato
-  const prepSeconds = (data.prep_minutes || 0) * 60
-  let remainingSeconds = naturalRemaining
-  if (prepSeconds > 0 && data.status === 'waiting' && turnsAhead > 0) {
-    remainingSeconds = Math.max(prepSeconds, naturalRemaining)
-  }
-
-  // Leer display_mode de la configuración del negocio
+  // Leer configuración del negocio (display_mode + parallel_capacity)
   const { data: settings } = await supabase
     .from('settings')
-    .select('display_mode')
+    .select('display_mode, parallel_capacity')
     .eq('business_id', data.business_id)
     .maybeSingle()
 
   const displayMode = (settings?.display_mode as 'timer' | 'queue') ?? 'timer'
+  const capacity = settings?.parallel_capacity ?? 2
+
+  // Piso: solo aplicar si el turno está en un slot posterior al primero.
+  // Con capacity>1, turnos paralelos en slot 0 cuentan regresivamente (su prep ya empezó);
+  // solo turnos en slot 1+ están realmente esperando.
+  const turnSlot = Math.floor(turnsAhead / capacity)
+  const prepSeconds = (data.prep_minutes || 0) * 60
+  let remainingSeconds = naturalRemaining
+  if (prepSeconds > 0 && data.status === 'waiting' && turnSlot > 0) {
+    remainingSeconds = Math.max(prepSeconds, naturalRemaining)
+  }
 
   return NextResponse.json({ ...data, remainingSeconds, turnsAhead, displayMode })
 }

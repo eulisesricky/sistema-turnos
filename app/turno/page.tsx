@@ -160,14 +160,10 @@ function TurnoContent() {
 
           const elapsed = (Date.now() - new Date(updated.created_at).getTime()) / 1000
           const naturalRemaining = Math.max(0, updated.estimated_wait_minutes * 60 - elapsed)
-          const prepSeconds = (updated.prep_minutes || 0) * 60
-          // Si el estimated bajó (recalcAfterRemoval), aplicar piso para que el timer
-          // no salte por debajo de prep_minutes en el instante del evento.
           const wasDecrease = prevEstimatedRef.current > 0 &&
             updated.estimated_wait_minutes < prevEstimatedRef.current
-          const newRemaining = wasDecrease && prepSeconds > 0
-            ? Math.max(prepSeconds, naturalRemaining)
-            : naturalRemaining
+          const wasIncrease = prevEstimatedRef.current > 0 &&
+            updated.estimated_wait_minutes > prevEstimatedRef.current
 
           if (updated.status === 'called') {
             // Cajero llamó el turno antes de que el tiempo llegara a cero
@@ -179,23 +175,28 @@ function TurnoContent() {
               alertPlayedRef.current = true
               playAlert()
             }
+            prevEstimatedRef.current = updated.estimated_wait_minutes
+            setTurno((prev: any) => ({ ...prev, ...updated, remainingSeconds: 0 }))
           } else if (updated.status === 'waiting') {
-            // Actualizó el tiempo: detectar si fue un incremento (demora)
-            if (
-              prevEstimatedRef.current > 0 &&
-              updated.estimated_wait_minutes > prevEstimatedRef.current
-            ) {
-              setDelayNotice(true)
+            if (wasIncrease) setDelayNotice(true)
+            prevEstimatedRef.current = updated.estimated_wait_minutes
+            if (wasDecrease && !reachedZeroRef.current) {
+              // Si el estimated bajó (recalcAfterRemoval), el cliente no puede
+              // saber si está en slot 0 paralelo o slot 1+. Delegar al servidor
+              // para que aplique el piso correcto según capacity.
+              fetchData()
+              return
             }
             if (!reachedZeroRef.current) {
-              expiryTimeRef.current = Date.now() + newRemaining * 1000
-              setTimeLeft(Math.ceil(newRemaining))
+              expiryTimeRef.current = Date.now() + naturalRemaining * 1000
+              setTimeLeft(Math.ceil(naturalRemaining))
             }
+            setTurno((prev: any) => ({ ...prev, ...updated, remainingSeconds: naturalRemaining }))
+          } else {
+            // completed/cancelled: no tocar el timer, debe quedar en cero
+            prevEstimatedRef.current = updated.estimated_wait_minutes
+            setTurno((prev: any) => ({ ...prev, ...updated }))
           }
-          // completed/cancelled: no tocar el timer, debe quedar en cero
-
-          prevEstimatedRef.current = updated.estimated_wait_minutes
-          setTurno((prev: any) => ({ ...prev, ...updated, remainingSeconds: newRemaining }))
         }
       )
       .subscribe()
