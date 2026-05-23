@@ -159,7 +159,15 @@ function TurnoContent() {
           }
 
           const elapsed = (Date.now() - new Date(updated.created_at).getTime()) / 1000
-          const newRemaining = Math.max(0, updated.estimated_wait_minutes * 60 - elapsed)
+          const naturalRemaining = Math.max(0, updated.estimated_wait_minutes * 60 - elapsed)
+          const prepSeconds = (updated.prep_minutes || 0) * 60
+          // Si el estimated bajó (recalcAfterRemoval), aplicar piso para que el timer
+          // no salte por debajo de prep_minutes en el instante del evento.
+          const wasDecrease = prevEstimatedRef.current > 0 &&
+            updated.estimated_wait_minutes < prevEstimatedRef.current
+          const newRemaining = wasDecrease && prepSeconds > 0
+            ? Math.max(prepSeconds, naturalRemaining)
+            : naturalRemaining
 
           if (updated.status === 'called') {
             // Cajero llamó el turno antes de que el tiempo llegara a cero
