@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     .eq('business_id', data.business_id)
     .maybeSingle()
 
-  const displayMode = (settings?.display_mode as 'timer' | 'queue') ?? 'timer'
+  const displayMode = (settings?.display_mode as 'timer' | 'queue' | 'both') ?? 'timer'
   const capacity = settings?.parallel_capacity ?? 2
 
   // Piso: solo aplicar si el turno está en un slot posterior al primero.

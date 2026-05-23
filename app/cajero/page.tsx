@@ -100,7 +100,7 @@ export default function CajeroPage() {
   const productDrag = useDraggable();
   const [parallelCapacity, setParallelCapacity] = useState(2);
   const [bufferPercentage, setBufferPercentage] = useState(20);
-  const [displayMode, setDisplayMode] = useState<'timer' | 'queue'>('timer');
+  const [displayMode, setDisplayMode] = useState<'timer' | 'queue' | 'both'>('timer');
   const [currentTime, setCurrentTime] = useState(Date.now());
   const selectedItems = useMemo(
     () => products.filter((product) => selectedProducts.includes(product.id)),
@@ -707,7 +707,7 @@ export default function CajeroPage() {
                   </div>
                   <div>
                     <label className="mb-3 block text-sm font-medium text-slate-700">Vista del cliente</label>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-3 gap-3">
                       <button
                         type="button"
                         onClick={() => setDisplayMode('timer')}
@@ -723,6 +723,14 @@ export default function CajeroPage() {
                       >
                         🔢 Posición en cola
                         <p className="mt-1 text-xs font-normal text-slate-400">Turnos restantes</p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDisplayMode('both')}
+                        className={`rounded-2xl border-2 px-4 py-3 text-sm font-semibold transition ${displayMode === 'both' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}
+                      >
+                        ⏱🔢 Ambos
+                        <p className="mt-1 text-xs font-normal text-slate-400">Cola + tiempo</p>
                       </button>
                     </div>
                   </div>

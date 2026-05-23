@@ -16,14 +16,14 @@ function TurnoContent() {
   const [audioActive, setAudioActive] = useState(false)
   const [calledByStaff, setCalledByStaff] = useState(false)
   const [delayNotice, setDelayNotice] = useState(false)
-  const [displayMode, setDisplayMode] = useState<'timer' | 'queue'>('timer')
+  const [displayMode, setDisplayMode] = useState<'timer' | 'queue' | 'both'>('timer')
   const [turnsAhead, setTurnsAhead] = useState(0)
   const audioContextRef = useRef<AudioContext | null>(null)
   const alertPlayedRef = useRef(false)
   const queueAlertedRef = useRef<Set<number>>(new Set())
   const expiryTimeRef = useRef<number>(0)
   const prevEstimatedRef = useRef<number>(0)
-  const displayModeRef = useRef<'timer' | 'queue'>('timer')
+  const displayModeRef = useRef<'timer' | 'queue' | 'both'>('timer')
   const reachedZeroRef = useRef(false)
 
   const playBeeps = (count: number, freq: number, gain: number, duration: number, gap: number) => {
@@ -247,7 +247,7 @@ function TurnoContent() {
   }
 
   useEffect(() => {
-    if (displayMode !== 'timer') return
+    if (displayMode !== 'timer' && displayMode !== 'both') return
     if (timeLeft === 0 && audioActive && !alertPlayedRef.current) {
       alertPlayedRef.current = true
       playAlert()
@@ -255,7 +255,7 @@ function TurnoContent() {
   }, [timeLeft, audioActive, displayMode])
 
   useEffect(() => {
-    if (!audioActive || displayMode !== 'queue') return
+    if (!audioActive || (displayMode !== 'queue' && displayMode !== 'both')) return
     if (turnsAhead === 1 && !queueAlertedRef.current.has(1)) {
       queueAlertedRef.current.add(1)
       playWarningAlert()
@@ -311,6 +311,34 @@ function TurnoContent() {
                 </button>
               )}
             </>
+          ) : displayMode === 'both' ? (
+            <>
+              {turnsAhead === 0 ? (
+                <div style={{padding:'1.25rem',background:'#064e3b',borderRadius:'1rem',color:'white',border:'2px solid #10b981',marginBottom:'1.5rem'}}>
+                  <p style={{fontSize:'2rem',fontWeight:'900',margin:'0 0 0.3rem 0'}}>¡ES TU TURNO!</p>
+                  <p style={{fontSize:'0.9rem',margin:'0',color:'#6ee7b7'}}>Acércate al mostrador a retirar tu pedido</p>
+                </div>
+              ) : (
+                <div style={{marginBottom:'1.5rem'}}>
+                  <p style={{color:'#4ade80',letterSpacing:'0.2em',fontSize:'0.75rem',marginBottom:'0.5rem'}}>TURNO(S) DELANTE</p>
+                  <p style={{fontSize:'4rem',fontWeight:'900',color: turnsAhead === 1 ? '#fbbf24' : '#4ade80',margin:'0',lineHeight:'1'}}>{turnsAhead}</p>
+                  {turnsAhead === 1 && (
+                    <div style={{marginTop:'1rem',padding:'0.75rem 1.25rem',background:'#451a03',borderRadius:'1rem',border:'1px solid #f59e0b'}}>
+                      <p style={{fontSize:'0.95rem',fontWeight:'600',margin:'0',color:'#fcd34d'}}>Vaya acercándose, usted será el próximo</p>
+                    </div>
+                  )}
+                </div>
+              )}
+              <div style={{borderTop:'1px solid #1e293b',paddingTop:'1.25rem'}}>
+                <p style={{color:'#4ade80',letterSpacing:'0.2em',fontSize:'0.7rem',marginBottom:'0.5rem'}}>TIEMPO ESTIMADO</p>
+                <h2 style={{fontSize:'3.5rem',fontWeight:'900',color: timeLeft === 0 ? '#fbbf24' : '#4ade80',margin:'0'}}>{mins}:{secs}</h2>
+              </div>
+              {!audioActive && (
+                <button onClick={handleActivateAudio} style={{marginTop:'1.5rem',padding:'0.75rem 1.5rem',background:'#3b82f6',color:'white',border:'none',borderRadius:'0.5rem',fontSize:'1rem',fontWeight:'600',cursor:'pointer',transition:'background 0.3s'}} onMouseEnter={(e) => (e.currentTarget.style.background = '#2563eb')} onMouseLeave={(e) => (e.currentTarget.style.background = '#3b82f6')}>
+                  🔔 Activar alerta sonora
+                </button>
+              )}
+            </>
           ) : (
             <>
               {turnsAhead === 0 ? (
@@ -355,7 +383,7 @@ function TurnoContent() {
               <p style={{fontSize:'0.9rem',margin:'0',color:'#93c5fd'}}>El cajero te llama — acércate al mostrador</p>
             </div>
           )}
-          {!calledByStaff && displayMode === 'timer' && timeLeft === 0 && turno && (
+          {!calledByStaff && (displayMode === 'timer' || displayMode === 'both') && timeLeft === 0 && turno && (
             <div style={{marginTop:'2rem',padding:'1.5rem',background:'#064e3b',borderRadius:'1rem',color:'white',border:'2px solid #10b981'}}>
               <p style={{fontSize:'1.8rem',fontWeight:'900',margin:'0 0 0.5rem 0'}}>¡ORDEN LISTA!</p>
               <p style={{fontSize:'0.9rem',margin:'0',color:'#d1d5db'}}>Acércate a retirar tu pedido</p>
