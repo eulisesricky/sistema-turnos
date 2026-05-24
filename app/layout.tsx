@@ -14,10 +14,10 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Cola Fácil",
-  description: "Sistema de gestión de turnos",
+  description: "Sistema de gestión de turnos inteligentes",
   icons: {
-    icon: '/logo.svg',
-    apple: '/logo.svg',
+    icon: '/icon.png',
+    apple: '/icon.png',
   },
 };
 
