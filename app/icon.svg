@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1e3a8a"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <circle cx="50" cy="50" r="49" fill="url(#bg)"/>
+  <!-- Orange top semicircle (CCW = through top in SVG visual space) -->
+  <path d="M 23 50 A 27 27 0 0 0 77 50"
+        fill="none" stroke="#f97316" stroke-width="8" stroke-linecap="butt"/>
+  <!-- Orange arrowhead pointing down at (77,50) -->
+  <polygon points="71,47 83,47 77,59" fill="#f97316"/>
+  <!-- Light-blue bottom semicircle (CW = through bottom in SVG visual space) -->
+  <path d="M 77 50 A 27 27 0 0 1 23 50"
+        fill="none" stroke="#7dd3fc" stroke-width="8" stroke-linecap="butt"/>
+  <!-- Blue arrowhead pointing up at (23,50) -->
+  <polygon points="17,53 29,53 23,41" fill="#7dd3fc"/>
+  <!-- Central "3,2,1" countdown text -->
+  <text x="50" y="56" text-anchor="middle" fill="white"
+        font-family="Arial, sans-serif" font-size="17" font-weight="bold">3,2,1</text>
+</svg>
