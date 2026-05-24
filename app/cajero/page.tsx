@@ -77,7 +77,7 @@ const translateStatus = (status: Turn['status']) => {
   }
 };
 
-function CajeroContent() {
+export default function CajeroPage() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [customerName, setCustomerName] = useState('');
@@ -1018,52 +1018,4 @@ function CajeroContent() {
   )
 }
 
-export default function CajeroPage() {
-  const [pinUnlocked, setPinUnlocked] = useState(false);
-  const [pinInput, setPinInput] = useState('');
-  const [pinError, setPinError] = useState(false);
-
-  useEffect(() => {
-    if (sessionStorage.getItem('cajero_auth') === '1') setPinUnlocked(true);
-  }, []);
-
-  const handlePinSubmit = (e: { preventDefault(): void }) => {
-    e.preventDefault();
-    const correct = process.env.NEXT_PUBLIC_CAJERO_PIN || '1234';
-    if (pinInput === correct) {
-      sessionStorage.setItem('cajero_auth', '1');
-      setPinUnlocked(true);
-    } else {
-      setPinError(true);
-      setPinInput('');
-    }
-  };
-
-  if (!pinUnlocked) {
-    return (
-      <div style={{minHeight:'100vh',background:'#0f172a',display:'flex',alignItems:'center',justifyContent:'center',padding:'1rem'}}>
-        <form onSubmit={handlePinSubmit} style={{background:'#1e293b',borderRadius:'1.5rem',padding:'2.5rem',width:'100%',maxWidth:'340px',boxShadow:'0 20px 60px rgba(0,0,0,0.5)'}}>
-          <h1 style={{color:'white',fontSize:'1.5rem',fontWeight:700,marginBottom:'0.5rem',textAlign:'center'}}>Panel del Cajero</h1>
-          <p style={{color:'#94a3b8',fontSize:'0.875rem',textAlign:'center',marginBottom:'2rem'}}>Ingresa el PIN de acceso</p>
-          <input
-            type="password"
-            inputMode="numeric"
-            maxLength={8}
-            autoFocus
-            value={pinInput}
-            onChange={(e) => { setPinInput(e.target.value); setPinError(false); }}
-            placeholder="PIN"
-            style={{width:'100%',background:'#0f172a',border:`2px solid ${pinError ? '#ef4444' : '#334155'}`,borderRadius:'0.75rem',padding:'0.875rem 1rem',color:'white',fontSize:'1.25rem',letterSpacing:'0.4em',textAlign:'center',outline:'none',boxSizing:'border-box',marginBottom:'0.75rem'}}
-          />
-          {pinError && <p style={{color:'#ef4444',fontSize:'0.8rem',textAlign:'center',marginBottom:'0.75rem'}}>PIN incorrecto</p>}
-          <button type="submit" style={{width:'100%',background:'#10b981',color:'white',border:'none',borderRadius:'0.75rem',padding:'0.875rem',fontSize:'1rem',fontWeight:700,cursor:'pointer'}}>
-            Entrar
-          </button>
-        </form>
-      </div>
-    );
-  }
-
-  return <CajeroContent />;
-}
 
