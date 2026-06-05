@@ -238,14 +238,15 @@ const buildQrMatrix = (text: string) => {
   return matrix.map((row) => row.map((cell) => (cell === 1 ? 1 : 0)));
 };
 
+const QR_URL = 'https://sistema-turnos-nine.vercel.app/r';
+const QR_MATRIX = buildQrMatrix(QR_URL);
+
 const renderQR = (matrix: number[][]) => {
-  const moduleSize = 8;
   return (
     <svg
       viewBox={`0 0 ${QR_SIZE} ${QR_SIZE}`}
-      width={QR_SIZE * moduleSize}
-      height={QR_SIZE * moduleSize}
-      className="mx-auto block"
+      width="100%"
+      height="100%"
       role="img"
       aria-label="Código QR para acceder a turno"
     >
@@ -264,7 +265,6 @@ const renderQR = (matrix: number[][]) => {
 export default function TVPage() {
   const [currentTurn, setCurrentTurn] = useState<Turn | null>(null);
   const [nextTurns, setNextTurns] = useState<Turn[]>([]);
-  const [qrUrl, setQrUrl] = useState('https://sistema-turnos-nine.vercel.app/registro');
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const toggleFullscreen = () => {
@@ -303,7 +303,6 @@ export default function TVPage() {
   };
 
   useEffect(() => {
-    setQrUrl('https://sistema-turnos-nine.vercel.app/registro');
     fetchTurns()
   
     const supabase = createClient();
@@ -319,83 +318,189 @@ export default function TVPage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
-      <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-6 py-8 lg:px-10">
-        <header className="mb-8 text-center">
-          <h1 className="text-6xl font-black tracking-tight lg:text-7xl">Sistema de Turnos</h1>
-        </header>
+    <div className="h-screen overflow-hidden flex flex-col bg-slate-950 text-white" style={{ padding: 'clamp(0.6rem, 1.2vw, 1.25rem)' }}>
 
-        <main className="grid gap-8 lg:grid-cols-[1.5fr_1fr] lg:items-start">
-          <section className="rounded-[2rem] border border-slate-800 bg-slate-900/90 p-8 shadow-2xl shadow-black/40">
-            <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <p className="text-sm uppercase tracking-[0.4em] text-slate-400">Turno actual</p>
-                <p className="mt-2 text-3xl font-semibold text-white">Llamando ahora</p>
-              </div>
-              <div className="inline-flex items-center gap-3 rounded-full bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-300">
-                En vivo
-              </div>
-            </div>
+      {/* Header compacto */}
+      <header className="flex-shrink-0 flex items-center justify-between" style={{ marginBottom: 'clamp(0.4rem, 0.7vw, 0.75rem)' }}>
+        <h1 className="font-black tracking-tight" style={{ fontSize: 'clamp(1.4rem, 2.8vw, 3.5rem)' }}>
+          Sistema de Turnos
+        </h1>
+        <div className="flex items-center gap-3">
+          <span
+            className="inline-flex items-center rounded-full bg-emerald-500/15 font-semibold text-emerald-300"
+            style={{ fontSize: 'clamp(0.6rem, 0.9vw, 0.85rem)', padding: '0.25rem 0.75rem' }}
+          >
+            ● En vivo
+          </span>
+          <span className="text-slate-500 font-mono" style={{ fontSize: 'clamp(0.5rem, 0.75vw, 0.75rem)' }}>
+            {APP_VERSION}
+          </span>
+        </div>
+      </header>
 
-            <div className="rounded-[2rem] border border-emerald-500/20 bg-emerald-500/10 p-10 text-center">
-              {currentTurn ? (
-                <>
-                  <p className="text-8xl font-black tracking-[0.2em] text-emerald-300">#{currentTurn.turn_number}</p>
-                  <p className="mt-6 text-4xl font-semibold text-white">{currentTurn.customer_name}</p>
-                </>
-              ) : (
-                <p className="text-6xl font-black tracking-[0.2em] text-slate-400">ESPERANDO</p>
-              )}
-            </div>
-          </section>
-
-          <aside className="rounded-[2rem] border border-slate-800 bg-slate-900/90 p-8 shadow-2xl shadow-black/40">
-            <p className="text-sm uppercase tracking-[0.4em] text-slate-400">QR para celular</p>
-            <div className="mt-6 flex h-full flex-col items-center justify-center gap-4 rounded-[2rem] border border-slate-700 bg-slate-950 px-6 py-8">
-              <div className="overflow-hidden rounded-3xl bg-white p-3 shadow-xl">
-                <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`} alt="QR Code" className="block" />
-              </div>
-              <p className="text-center text-lg font-semibold text-slate-200">Escanea Para Seguimiento De Turno</p>
-              <p className="text-center text-lg font-bold text-white">{qrUrl}</p>
-            </div>
-          </aside>
-        </main>
-
-        <section className="mt-10 rounded-[2rem] border border-slate-800 bg-slate-900/90 p-8 shadow-2xl shadow-black/40">
-          <div className="mb-6 flex items-center justify-between gap-4">
+      {/* Cuerpo principal — dos columnas, llena el resto de la pantalla */}
+      <div
+        className="flex-1 grid overflow-hidden"
+        style={{ gridTemplateColumns: '3fr 2fr', gap: 'clamp(0.4rem, 0.7vw, 0.75rem)' }}
+      >
+        {/* IZQUIERDA: turno actual */}
+        <section
+          className="flex flex-col rounded-[2rem] border border-slate-800 bg-slate-900/90 shadow-2xl shadow-black/40 overflow-hidden"
+          style={{ padding: 'clamp(0.8rem, 1.4vw, 1.5rem)' }}
+        >
+          <div className="flex-shrink-0 flex items-center justify-between" style={{ marginBottom: 'clamp(0.4rem, 0.7vw, 0.75rem)' }}>
             <div>
-              <p className="text-sm uppercase tracking-[0.35em] text-slate-400">Próximos turnos</p>
-              <p className="mt-2 text-2xl font-semibold text-white">En espera</p>
+              <p className="uppercase tracking-[0.4em] text-slate-400" style={{ fontSize: 'clamp(0.5rem, 0.8vw, 0.85rem)' }}>
+                Turno actual
+              </p>
+              <p className="font-semibold text-white" style={{ fontSize: 'clamp(0.9rem, 1.7vw, 2rem)' }}>
+                Llamando ahora
+              </p>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="rounded-full bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-300">
-                {nextTurns.length} mostrados
-              </span>
-              <span className="text-xs text-slate-500 font-mono">{APP_VERSION}</span>
-            </div>
+            <span
+              className="inline-flex items-center rounded-full bg-emerald-500/15 font-semibold text-emerald-300"
+              style={{ fontSize: 'clamp(0.5rem, 0.8vw, 0.8rem)', padding: '0.2rem 0.6rem' }}
+            >
+              En vivo
+            </span>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            {nextTurns.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-slate-700 bg-slate-950/80 p-8 text-center text-slate-500">
-                No hay turnos en espera
+          <div className="flex-1 flex items-center justify-center rounded-[2rem] border border-emerald-500/20 bg-emerald-500/10 overflow-hidden">
+            {currentTurn ? (
+              <div className="text-center px-4">
+                <p
+                  className="font-black leading-none text-emerald-300"
+                  style={{ fontSize: 'clamp(5rem, 19vw, 22rem)' }}
+                >
+                  #{currentTurn.turn_number}
+                </p>
+                <p
+                  className="font-semibold text-white"
+                  style={{ fontSize: 'clamp(1.2rem, 3.5vw, 5rem)', marginTop: 'clamp(0.4rem, 0.7vw, 1rem)' }}
+                >
+                  {currentTurn.customer_name}
+                </p>
               </div>
             ) : (
-              nextTurns.map((turn) => (
-                <div
-                  key={turn.id}
-                  className="rounded-3xl border border-slate-800 bg-slate-950/80 p-6 transition hover:border-emerald-500"
-                >
-                  <p className="text-5xl font-black text-white">#{turn.turn_number}</p>
-                  <p className="mt-3 text-xl font-semibold text-slate-200">{turn.customer_name}</p>
-                </div>
-              ))
+              <div className="text-center">
+                <p className="font-black text-slate-500" style={{ fontSize: 'clamp(2.5rem, 7vw, 9rem)' }}>
+                  ESPERANDO
+                </p>
+                <p className="text-slate-600" style={{ fontSize: 'clamp(0.7rem, 1.2vw, 1.5rem)', marginTop: '0.5rem' }}>
+                  Sin turno activo
+                </p>
+              </div>
             )}
           </div>
         </section>
+
+        {/* DERECHA: QR + próximos turnos */}
+        <div
+          className="flex flex-col overflow-hidden"
+          style={{ gap: 'clamp(0.4rem, 0.7vw, 0.75rem)' }}
+        >
+          {/* QR */}
+          <section
+            className="flex-shrink-0 rounded-[2rem] border border-slate-800 bg-slate-900/90 shadow-2xl shadow-black/40"
+            style={{ padding: 'clamp(0.6rem, 1.1vw, 1.25rem)' }}
+          >
+            <p
+              className="uppercase tracking-[0.4em] text-slate-400"
+              style={{ fontSize: 'clamp(0.45rem, 0.7vw, 0.75rem)', marginBottom: 'clamp(0.3rem, 0.5vw, 0.6rem)' }}
+            >
+              QR para celular
+            </p>
+            <div className="flex items-center" style={{ gap: 'clamp(0.4rem, 0.7vw, 0.9rem)' }}>
+              <div
+                className="flex-shrink-0 overflow-hidden rounded-2xl bg-white shadow-xl"
+                style={{
+                  padding: 'clamp(0.25rem, 0.4vw, 0.5rem)',
+                  width: 'clamp(70px, 9vw, 160px)',
+                  height: 'clamp(70px, 9vw, 160px)',
+                }}
+              >
+                {renderQR(QR_MATRIX)}
+              </div>
+              <div className="min-w-0">
+                <p
+                  className="font-semibold text-slate-200"
+                  style={{ fontSize: 'clamp(0.6rem, 1.1vw, 1.2rem)', marginBottom: '0.2rem' }}
+                >
+                  Escanea para ver tu turno
+                </p>
+                <p
+                  className="font-bold text-white"
+                  style={{ fontSize: 'clamp(0.55rem, 1vw, 1rem)', wordBreak: 'break-all' }}
+                >
+                  {QR_URL}
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* Próximos turnos */}
+          <section
+            className="flex-1 flex flex-col rounded-[2rem] border border-slate-800 bg-slate-900/90 shadow-2xl shadow-black/40 overflow-hidden"
+            style={{ padding: 'clamp(0.6rem, 1.1vw, 1.25rem)' }}
+          >
+            <div
+              className="flex-shrink-0 flex items-center justify-between"
+              style={{ marginBottom: 'clamp(0.3rem, 0.5vw, 0.6rem)' }}
+            >
+              <div>
+                <p className="uppercase tracking-[0.35em] text-slate-400" style={{ fontSize: 'clamp(0.45rem, 0.7vw, 0.75rem)' }}>
+                  Próximos turnos
+                </p>
+                <p className="font-semibold text-white" style={{ fontSize: 'clamp(0.8rem, 1.5vw, 1.8rem)' }}>
+                  En espera
+                </p>
+              </div>
+              <span
+                className="rounded-full bg-slate-800 font-semibold text-slate-300"
+                style={{ fontSize: 'clamp(0.5rem, 0.8vw, 0.85rem)', padding: '0.2rem 0.6rem' }}
+              >
+                {nextTurns.length} en cola
+              </span>
+            </div>
+
+            <div
+              className="flex-1 grid gap-2 overflow-hidden"
+              style={{ gridTemplateColumns: '1fr 1fr', alignContent: 'start' }}
+            >
+              {nextTurns.length === 0 ? (
+                <div className="col-span-2 flex items-center justify-center rounded-3xl border border-dashed border-slate-700 bg-slate-950/80">
+                  <p className="text-slate-500" style={{ fontSize: 'clamp(0.65rem, 1.1vw, 1.1rem)' }}>
+                    Sin turnos en espera
+                  </p>
+                </div>
+              ) : (
+                nextTurns.map((turn) => (
+                  <div
+                    key={turn.id}
+                    className="rounded-3xl border border-slate-800 bg-slate-950/80 transition hover:border-emerald-500"
+                    style={{ padding: 'clamp(0.4rem, 0.7vw, 0.75rem)' }}
+                  >
+                    <p
+                      className="font-black text-white leading-none"
+                      style={{ fontSize: 'clamp(1.5rem, 3vw, 4rem)' }}
+                    >
+                      #{turn.turn_number}
+                    </p>
+                    <p
+                      className="font-semibold text-slate-200 truncate"
+                      style={{ fontSize: 'clamp(0.55rem, 1vw, 1.1rem)', marginTop: '0.2rem' }}
+                    >
+                      {turn.customer_name}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+        </div>
       </div>
 
-      {/* Botón pantalla completa — esquina inferior derecha */}
+      {/* Botón pantalla completa */}
       <button
         onClick={toggleFullscreen}
         title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}

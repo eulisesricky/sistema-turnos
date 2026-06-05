@@ -77,6 +77,13 @@ const translateStatus = (status: Turn['status']) => {
   }
 };
 
+const Spin = () => (
+  <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+    <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75" />
+  </svg>
+);
+
 export default function CajeroPage() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -86,6 +93,7 @@ export default function CajeroPage() {
   const [newProductName, setNewProductName] = useState('');
   const [newProductMinutes, setNewProductMinutes] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingBtn, setLoadingBtn] = useState<string | null>(null);
   const [successUrl, setSuccessUrl] = useState<string | null>(null);
   const [successPin, setSuccessPin] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -405,29 +413,34 @@ export default function CajeroPage() {
   };
 
   const adjustTurnTime = async (id: string, deltaMinutes: number, currentEstimated: number) => {
-    const supabase = createClient()
-    const thisTurn = turns.find((t) => t.id === id)
-    // Piso: el ajuste nunca puede bajar el estimado por debajo del prep_minutes del turno
-    const piso = thisTurn?.prep_minutes && thisTurn.prep_minutes > 0 ? thisTurn.prep_minutes : 1
-    const newEstimated = Math.max(piso, Math.round(currentEstimated + deltaMinutes))
-    const { error } = await supabase
-      .from('turns')
-      .update({ estimated_wait_minutes: newEstimated })
-      .eq('id', id)
-    if (error) { console.error('Error al ajustar tiempo:', error.message); return }
-
-    // Cascade: sumar el mismo delta a todos los turnos en espera posteriores
-    if (!thisTurn) return
-    const subsequent = turns.filter(
-      (t) => t.status === 'waiting' && t.created_at > thisTurn.created_at
-    )
-    for (const turn of subsequent) {
-      const pisoTurn = turn.prep_minutes && turn.prep_minutes > 0 ? turn.prep_minutes : 1
-      const newEst = Math.max(pisoTurn, Math.round(turn.estimated_wait_minutes + deltaMinutes))
-      await supabase
+    setLoadingBtn(`${id}-adj${deltaMinutes}`);
+    try {
+      const supabase = createClient()
+      const thisTurn = turns.find((t) => t.id === id)
+      // Piso: el ajuste nunca puede bajar el estimado por debajo del prep_minutes del turno
+      const piso = thisTurn?.prep_minutes && thisTurn.prep_minutes > 0 ? thisTurn.prep_minutes : 1
+      const newEstimated = Math.max(piso, Math.round(currentEstimated + deltaMinutes))
+      const { error } = await supabase
         .from('turns')
-        .update({ estimated_wait_minutes: newEst })
-        .eq('id', turn.id)
+        .update({ estimated_wait_minutes: newEstimated })
+        .eq('id', id)
+      if (error) { console.error('Error al ajustar tiempo:', error.message); return }
+
+      // Cascade: sumar el mismo delta a todos los turnos en espera posteriores
+      if (!thisTurn) return
+      const subsequent = turns.filter(
+        (t) => t.status === 'waiting' && t.created_at > thisTurn.created_at
+      )
+      for (const turn of subsequent) {
+        const pisoTurn = turn.prep_minutes && turn.prep_minutes > 0 ? turn.prep_minutes : 1
+        const newEst = Math.max(pisoTurn, Math.round(turn.estimated_wait_minutes + deltaMinutes))
+        await supabase
+          .from('turns')
+          .update({ estimated_wait_minutes: newEst })
+          .eq('id', turn.id)
+      }
+    } finally {
+      setLoadingBtn(null);
     }
   }
 
@@ -480,33 +493,38 @@ export default function CajeroPage() {
   };
 
   const updateTurnStatus = async (id: string, status: Turn['status']) => {
-    const supabase = createClient();
-    const thisTurn = turns.find((t) => t.id === id);
+    setLoadingBtn(`${id}-${status}`);
+    try {
+      const supabase = createClient();
+      const thisTurn = turns.find((t) => t.id === id);
 
-    if (status === 'completed' || status === 'cancelled') {
-      const updates: { status: Turn['status']; completed_at: string | null } = {
-        status,
-        completed_at: status === 'completed' ? new Date().toISOString() : null,
-      };
-      const { error } = await supabase.from('turns').update(updates).eq('id', id);
-      if (error) {
-        console.error(error.message);
-        return;
-      }
-      if (thisTurn) await recalcAfterRemoval(thisTurn.created_at);
-    } else {
-      const { error } = await supabase
-        .from('turns')
-        .update({ status, completed_at: null })
-        .eq('id', id);
+      if (status === 'completed' || status === 'cancelled') {
+        const updates: { status: Turn['status']; completed_at: string | null } = {
+          status,
+          completed_at: status === 'completed' ? new Date().toISOString() : null,
+        };
+        const { error } = await supabase.from('turns').update(updates).eq('id', id);
+        if (error) {
+          console.error(error.message);
+          return;
+        }
+        if (thisTurn) await recalcAfterRemoval(thisTurn.created_at);
+      } else {
+        const { error } = await supabase
+          .from('turns')
+          .update({ status, completed_at: null })
+          .eq('id', id);
 
-      if (error) {
-        console.error(error.message);
-        return;
+        if (error) {
+          console.error(error.message);
+          return;
+        }
       }
+
+      fetchTurns();
+    } finally {
+      setLoadingBtn(null);
     }
-
-    fetchTurns();
   };
 
   const openTV = () => {
@@ -815,8 +833,10 @@ export default function CajeroPage() {
                         <button
                           type="button"
                           onClick={() => updateTurnStatus(turn.id, 'called')}
-                          className="rounded-2xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-400"
+                          disabled={loadingBtn?.startsWith(turn.id) ?? false}
+                          className="inline-flex items-center gap-1.5 rounded-2xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-400 disabled:opacity-60"
                         >
+                          {loadingBtn === `${turn.id}-called` && <Spin />}
                           Llamar
                         </button>
                       )}
@@ -824,16 +844,20 @@ export default function CajeroPage() {
                         <button
                           type="button"
                           onClick={() => updateTurnStatus(turn.id, 'completed')}
-                          className="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
+                          disabled={loadingBtn?.startsWith(turn.id) ?? false}
+                          className="inline-flex items-center gap-1.5 rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-60"
                         >
+                          {loadingBtn === `${turn.id}-completed` && <Spin />}
                           Completar
                         </button>
                       )}
                       <button
                         type="button"
                         onClick={() => updateTurnStatus(turn.id, 'cancelled')}
-                        className="rounded-2xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-500"
+                        disabled={loadingBtn?.startsWith(turn.id) ?? false}
+                        className="inline-flex items-center gap-1.5 rounded-2xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-500 disabled:opacity-60"
                       >
+                        {loadingBtn === `${turn.id}-cancelled` && <Spin />}
                         Cancelar
                       </button>
                     </div>
@@ -842,25 +866,31 @@ export default function CajeroPage() {
                       <button
                         type="button"
                         onClick={() => adjustTurnTime(turn.id, -5, turn.estimated_wait_minutes)}
-                        className="rounded-xl bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-300"
+                        disabled={loadingBtn?.startsWith(turn.id) ?? false}
+                        className="inline-flex items-center gap-1 rounded-xl bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-300 disabled:opacity-60"
                         title="Restar 5 minutos"
                       >
+                        {loadingBtn === `${turn.id}-adj-5` && <Spin />}
                         −5 min
                       </button>
                       <button
                         type="button"
                         onClick={() => adjustTurnTime(turn.id, 5, turn.estimated_wait_minutes)}
-                        className="rounded-xl bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-300"
+                        disabled={loadingBtn?.startsWith(turn.id) ?? false}
+                        className="inline-flex items-center gap-1 rounded-xl bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-300 disabled:opacity-60"
                         title="Sumar 5 minutos"
                       >
+                        {loadingBtn === `${turn.id}-adj5` && <Spin />}
                         +5 min
                       </button>
                       <button
                         type="button"
                         onClick={() => adjustTurnTime(turn.id, 10, turn.estimated_wait_minutes)}
-                        className="rounded-xl bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800 transition hover:bg-amber-200"
+                        disabled={loadingBtn?.startsWith(turn.id) ?? false}
+                        className="inline-flex items-center gap-1 rounded-xl bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800 transition hover:bg-amber-200 disabled:opacity-60"
                         title="Sumar 10 minutos por demora"
                       >
+                        {loadingBtn === `${turn.id}-adj10` && <Spin />}
                         +10 min
                       </button>
                     </div>
