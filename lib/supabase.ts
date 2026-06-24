@@ -38,3 +38,18 @@ export function createAdminClient() {
     }
   });
 }
+
+const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY ?? '';
+
+// Cliente con clave de servicio (solo servidor). Bypassa RLS — usar únicamente
+// dentro de API routes, nunca en componentes de cliente.
+export function createAdminClient() {
+  if (!supabaseUrl || !supabaseSecretKey) {
+    throw new Error(
+      'Missing Supabase environment variables: NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SECRET_KEY'
+    );
+  }
+  return supabaseCreateClient(supabaseUrl, supabaseSecretKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { createClient } from '@/lib/supabase';
 import { APP_VERSION } from '@/lib/version';
 
 function useDraggable() {
@@ -58,9 +57,6 @@ interface Product {
   name: string;
   estimated_minutes: number;
 }
-
-const DEFAULT_QUEUE_ID = process.env.NEXT_PUBLIC_QUEUE_ID || 'default-queue-id';
-const DEFAULT_BUSINESS_ID = process.env.NEXT_PUBLIC_BUSINESS_ID || 'default-business-id';
 
 const translateStatus = (status: Turn['status']) => {
   switch (status) {
@@ -157,56 +153,48 @@ export default function CajeroPage() {
   };
 
   const fetchTurns = async () => {
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from('turns')
-      .select('id, customer_name, whatsapp, pin, turn_number, status, created_at, estimated_wait_minutes, prep_minutes')
-      .eq('business_id', DEFAULT_BUSINESS_ID)
-      .in('status', ['waiting', 'called'])
-      .order('created_at', { ascending: true });
-
-    if (error) {
-      console.error(error.message);
-      return;
+    try {
+      const res = await fetch('/api/turns');
+      const data = await res.json();
+      if (!res.ok) {
+        console.error(data?.error ?? 'Error al cargar turnos');
+        return;
+      }
+      setTurns(data ?? []);
+    } catch (e) {
+      console.error(e);
     }
-
-    setTurns(data ?? []);
   };
 
   const fetchProducts = async () => {
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from('products')
-      .select('id, name, estimated_minutes')
-      .eq('business_id', DEFAULT_BUSINESS_ID)
-      .order('name', { ascending: true });
-
-    if (error) {
-      console.error(error.message);
-      return;
+    try {
+      const res = await fetch('/api/products');
+      const data = await res.json();
+      if (!res.ok) {
+        console.error(data?.error ?? 'Error al cargar productos');
+        return;
+      }
+      setProducts(data ?? []);
+    } catch (e) {
+      console.error(e);
     }
-
-    setProducts(data ?? []);
   };
 
   const fetchSettings = async () => {
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from('settings')
-      .select('parallel_capacity, buffer_percentage, display_mode')
-      .eq('business_id', DEFAULT_BUSINESS_ID)
-      .limit(1)
-      .maybeSingle();
-
-    if (error) {
-      console.error('Error loading settings:', error.message);
-      return;
-    }
-
-    if (data) {
-      setParallelCapacity(data.parallel_capacity ?? 2);
-      setBufferPercentage(data.buffer_percentage ?? 20);
-      setDisplayMode((data.display_mode as 'timer' | 'queue') ?? 'timer');
+    try {
+      const res = await fetch('/api/settings');
+      const data = await res.json();
+      if (!res.ok) {
+        console.error('Error loading settings:', data?.error);
+        return;
+      }
+      if (data) {
+        setParallelCapacity(data.parallel_capacity ?? 2);
+        setBufferPercentage(data.buffer_percentage ?? 20);
+        setDisplayMode((data.display_mode as 'timer' | 'queue') ?? 'timer');
+      }
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -215,21 +203,12 @@ export default function CajeroPage() {
     fetchProducts();
     fetchSettings();
 
-    const supabase = createClient();
-    const channel = supabase
-      .channel('turns-channel')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'turns' },
-        () => {
-          fetchTurns();
-        }
-      )
-      .subscribe();
+    // Reemplazo del realtime de Supabase: sondeo cada 5 segundos.
+    const interval = setInterval(() => {
+      fetchTurns();
+    }, 5000);
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -262,18 +241,16 @@ export default function CajeroPage() {
       return;
     }
 
-    const supabase = createClient();
-    const { error } = await supabase.from('products').insert([
-      {
-        name: newProductName.trim(),
-        estimated_minutes: minutes,
-        business_id: DEFAULT_BUSINESS_ID,
-      },
-    ]);
+    const res = await fetch('/api/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newProductName.trim(), estimated_minutes: minutes }),
+    });
 
-    if (error) {
-      console.log('Error al insertar producto:', error);
-      setErrorMessage(`Error al agregar producto: ${error.message}`);
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      console.log('Error al insertar producto:', data);
+      setErrorMessage(`Error al agregar producto: ${data?.error ?? 'desconocido'}`);
       return;
     }
 
@@ -288,11 +265,13 @@ export default function CajeroPage() {
       return;
     }
 
-    const supabase = createClient();
-    const { error } = await supabase.from('products').delete().eq('id', productId);
+    const res = await fetch(`/api/products?id=${encodeURIComponent(productId)}`, {
+      method: 'DELETE',
+    });
 
-    if (error) {
-      console.error(error.message);
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      console.error(data?.error ?? 'Error al eliminar producto');
       setErrorMessage('Error al eliminar producto.');
       return;
     }
@@ -303,13 +282,18 @@ export default function CajeroPage() {
 
   const handleSaveProductEdit = async () => {
     if (!editingProductId || !editingProductName.trim() || !editingProductMinutes) return;
-    const supabase = createClient();
-    const { error } = await supabase
-      .from('products')
-      .update({ name: editingProductName.trim(), estimated_minutes: Number(editingProductMinutes) })
-      .eq('id', editingProductId);
-    if (error) {
-      console.error(error.message);
+    const res = await fetch('/api/products', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: editingProductId,
+        name: editingProductName.trim(),
+        estimated_minutes: Number(editingProductMinutes),
+      }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      console.error(data?.error ?? 'Error al guardar cambios');
       setErrorMessage('Error al guardar cambios.');
       return;
     }
@@ -339,30 +323,22 @@ export default function CajeroPage() {
     const tomorrow = new Date(today);
     tomorrow.setDate(today.getDate() + 1);
 
-    const supabase = createClient();
-    const { count, error: countError } = await supabase
-      .from('turns')
-      .select('id', { count: 'exact', head: true })
-      .eq('business_id', DEFAULT_BUSINESS_ID)
-      .gte('created_at', today.toISOString())
-      .lt('created_at', tomorrow.toISOString());
-
-    if (countError) {
-      console.error(countError.message);
+    const countRes = await fetch(
+      `/api/turns/count?from=${encodeURIComponent(today.toISOString())}&to=${encodeURIComponent(tomorrow.toISOString())}`
+    );
+    const countJson = await countRes.json().catch(() => null);
+    if (!countRes.ok) {
+      console.error(countJson?.error ?? 'Error al contar turnos');
       setErrorMessage('Error al calcular el número de turno.');
       setLoading(false);
       return;
     }
+    const count: number = countJson?.count ?? 0;
 
-    const { data: turnosActivos, error: turnosError } = await supabase
-      .from('turns')
-      .select('estimated_wait_minutes')
-      .eq('business_id', DEFAULT_BUSINESS_ID)
-      .in('status', ['waiting', 'called'])
-      .order('created_at', { ascending: true });
-
-    if (turnosError) {
-      console.error(turnosError.message);
+    const activeRes = await fetch('/api/turns/active');
+    const turnosActivos = await activeRes.json().catch(() => null);
+    if (!activeRes.ok) {
+      console.error(turnosActivos?.error ?? 'Error al calcular el tiempo de espera');
       setErrorMessage('Error al calcular el tiempo de espera.');
       setLoading(false);
       return;
@@ -382,24 +358,24 @@ export default function CajeroPage() {
     const token = Math.random().toString(36).substr(2, 9);
     const pin = !whatsapp.trim() ? Math.floor(1000 + Math.random() * 9000).toString() : null;
 
-    const { error } = await supabase.from('turns').insert([
-      {
+    const insertRes = await fetch('/api/turns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         customer_name: customerName,
         whatsapp,
         pin,
         turn_number: turnNumber,
-        status: 'waiting',
         estimated_wait_minutes: tiempoFinal,
         prep_minutes: prepMinutes,
         token,
-        queue_id: DEFAULT_QUEUE_ID,
-        business_id: DEFAULT_BUSINESS_ID,
-      },
-    ]);
+      }),
+    });
 
-    if (error) {
-      console.log('Error al registrar turno:', error);
-      setErrorMessage(`Error al registrar el turno: ${error.message}`);
+    if (!insertRes.ok) {
+      const data = await insertRes.json().catch(() => null);
+      console.log('Error al registrar turno:', data);
+      setErrorMessage(`Error al registrar el turno: ${data?.error ?? 'desconocido'}`);
       setLoading(false);
       return;
     }
@@ -415,16 +391,20 @@ export default function CajeroPage() {
   const adjustTurnTime = async (id: string, deltaMinutes: number, currentEstimated: number) => {
     setLoadingBtn(`${id}-adj${deltaMinutes}`);
     try {
-      const supabase = createClient()
       const thisTurn = turns.find((t) => t.id === id)
       // Piso: el ajuste nunca puede bajar el estimado por debajo del prep_minutes del turno
       const piso = thisTurn?.prep_minutes && thisTurn.prep_minutes > 0 ? thisTurn.prep_minutes : 1
       const newEstimated = Math.max(piso, Math.round(currentEstimated + deltaMinutes))
-      const { error } = await supabase
-        .from('turns')
-        .update({ estimated_wait_minutes: newEstimated })
-        .eq('id', id)
-      if (error) { console.error('Error al ajustar tiempo:', error.message); return }
+      const res = await fetch('/api/turns', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, estimated_wait_minutes: newEstimated }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        console.error('Error al ajustar tiempo:', data?.error)
+        return
+      }
 
       // Cascade: sumar el mismo delta a todos los turnos en espera posteriores
       if (!thisTurn) return
@@ -434,27 +414,23 @@ export default function CajeroPage() {
       for (const turn of subsequent) {
         const pisoTurn = turn.prep_minutes && turn.prep_minutes > 0 ? turn.prep_minutes : 1
         const newEst = Math.max(pisoTurn, Math.round(turn.estimated_wait_minutes + deltaMinutes))
-        await supabase
-          .from('turns')
-          .update({ estimated_wait_minutes: newEst })
-          .eq('id', turn.id)
+        await fetch('/api/turns', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: turn.id, estimated_wait_minutes: newEst }),
+        })
       }
+      fetchTurns();
     } finally {
       setLoadingBtn(null);
     }
   }
 
   const recalcAfterRemoval = async (removedCreatedAt: string) => {
-    const supabase = createClient();
-    const { data: allActive, error: activeError } = await supabase
-      .from('turns')
-      .select('id, estimated_wait_minutes, prep_minutes, status, created_at')
-      .eq('business_id', DEFAULT_BUSINESS_ID)
-      .in('status', ['waiting', 'called'])
-      .order('created_at', { ascending: true });
-
-    if (activeError || !allActive) {
-      console.error('Error al obtener turnos activos:', activeError?.message);
+    const res = await fetch('/api/turns');
+    const allActive = await res.json().catch(() => null);
+    if (!res.ok || !allActive) {
+      console.error('Error al obtener turnos activos:', allActive?.error);
       return;
     }
 
@@ -485,38 +461,44 @@ export default function CajeroPage() {
       const pisoConElapsed = Math.ceil(tiempoBase + elapsedSeconds / 60);
       const nuevoTiempo = Math.max(calculado, pisoConElapsed);
 
-      await supabase
-        .from('turns')
-        .update({ estimated_wait_minutes: nuevoTiempo })
-        .eq('id', turn.id);
+      await fetch('/api/turns', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: turn.id, estimated_wait_minutes: nuevoTiempo }),
+      });
     }
   };
 
   const updateTurnStatus = async (id: string, status: Turn['status']) => {
     setLoadingBtn(`${id}-${status}`);
     try {
-      const supabase = createClient();
       const thisTurn = turns.find((t) => t.id === id);
 
       if (status === 'completed' || status === 'cancelled') {
-        const updates: { status: Turn['status']; completed_at: string | null } = {
-          status,
-          completed_at: status === 'completed' ? new Date().toISOString() : null,
-        };
-        const { error } = await supabase.from('turns').update(updates).eq('id', id);
-        if (error) {
-          console.error(error.message);
+        const res = await fetch('/api/turns', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id,
+            status,
+            completed_at: status === 'completed' ? new Date().toISOString() : null,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          console.error(data?.error ?? 'Error al actualizar turno');
           return;
         }
         if (thisTurn) await recalcAfterRemoval(thisTurn.created_at);
       } else {
-        const { error } = await supabase
-          .from('turns')
-          .update({ status, completed_at: null })
-          .eq('id', id);
-
-        if (error) {
-          console.error(error.message);
+        const res = await fetch('/api/turns', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, status, completed_at: null }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          console.error(data?.error ?? 'Error al actualizar turno');
           return;
         }
       }
@@ -771,21 +753,19 @@ export default function CajeroPage() {
                       setSettingsError(null);
                       setSettingsSaved(false);
                       try {
-                        const supabase = createClient();
-                        const { error } = await supabase
-                          .from('settings')
-                          .upsert(
-                            {
-                              business_id: DEFAULT_BUSINESS_ID,
-                              parallel_capacity: parallelCapacity,
-                              buffer_percentage: bufferPercentage,
-                              display_mode: displayMode,
-                            },
-                            { onConflict: 'business_id' }
-                          );
-                        if (error) {
-                          console.error('Error guardando configuración:', error.message);
-                          setSettingsError(error.message);
+                        const res = await fetch('/api/settings', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            parallel_capacity: parallelCapacity,
+                            buffer_percentage: bufferPercentage,
+                            display_mode: displayMode,
+                          }),
+                        });
+                        if (!res.ok) {
+                          const data = await res.json().catch(() => null);
+                          console.error('Error guardando configuración:', data?.error);
+                          setSettingsError(data?.error ?? 'desconocido');
                           setTimeout(() => setSettingsError(null), 5000);
                         } else {
                           setSettingsSaved(true);
