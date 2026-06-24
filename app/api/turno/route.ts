@@ -1,11 +1,12 @@
-import { createClient } from '@/lib/supabase'
+import { createAdminClient } from '@/lib/supabase'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('token')
   if (!token) return NextResponse.json({ error: 'Token requerido' }, { status: 400 })
 
-  const supabase = createClient()
+  const supabase = createAdminClient()
+
   const { data, error } = await supabase
     .from('turns')
     .select('*')
@@ -20,7 +21,6 @@ export async function GET(request: NextRequest) {
   const totalSeconds = (data.estimated_wait_minutes || 0) * 60
   const naturalRemaining = Math.max(0, totalSeconds - elapsedSeconds)
 
-  // Contar turnos delante (se usa tanto para el piso como para el modo cola)
   const { count: turnsAheadCount } = await supabase
     .from('turns')
     .select('id', { count: 'exact', head: true })
@@ -30,7 +30,6 @@ export async function GET(request: NextRequest) {
 
   const turnsAhead = turnsAheadCount ?? 0
 
-  // Leer configuración del negocio (display_mode + parallel_capacity)
   const { data: settings } = await supabase
     .from('settings')
     .select('display_mode, parallel_capacity')
@@ -40,12 +39,10 @@ export async function GET(request: NextRequest) {
   const displayMode = (settings?.display_mode as 'timer' | 'queue' | 'both') ?? 'timer'
   const capacity = settings?.parallel_capacity ?? 2
 
-  // Piso: solo aplicar si el turno está en un slot posterior al primero.
-  // Con capacity>1, turnos paralelos en slot 0 cuentan regresivamente (su prep ya empezó);
-  // solo turnos en slot 1+ están realmente esperando.
   const turnSlot = Math.floor(turnsAhead / capacity)
   const prepSeconds = (data.prep_minutes || 0) * 60
   let remainingSeconds = naturalRemaining
+
   if (prepSeconds > 0 && data.status === 'waiting' && turnSlot > 0) {
     remainingSeconds = Math.max(prepSeconds, naturalRemaining)
   }
