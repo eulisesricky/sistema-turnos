@@ -2,10 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase'
-
-const DEFAULT_QUEUE_ID = process.env.NEXT_PUBLIC_QUEUE_ID || 'default-queue-id'
-const DEFAULT_BUSINESS_ID = process.env.NEXT_PUBLIC_BUSINESS_ID || 'default-business-id'
 
 export default function RegistroPage() {
   const router = useRouter()
@@ -44,31 +40,28 @@ export default function RegistroPage() {
     setMessage('')
     setLoading(true)
 
-    const supabase = createClient()
-
-    const query = supabase
-      .from('turns')
-      .select('*')
-      .eq('business_id', DEFAULT_BUSINESS_ID)
-      .in('status', ['waiting', 'called'])
-      .order('created_at', { ascending: false })
-      .limit(1)
-
-    const queryWithFilter =
+    const params =
       searchMode === 'whatsapp'
-        ? query.eq('whatsapp', whatsapp.trim())
-        : query.eq('pin', pin.trim())
+        ? `whatsapp=${encodeURIComponent(whatsapp.trim())}`
+        : `pin=${encodeURIComponent(pin.trim())}`
 
-    const { data, error: queryError } = await queryWithFilter
-
-    if (queryError) {
-      console.error(queryError)
+    let existingTurn: { token?: string } | null = null
+    try {
+      const res = await fetch(`/api/turns/search?${params}`)
+      const data = await res.json()
+      if (!res.ok) {
+        console.error(data?.error)
+        setError('Error al buscar tu turno. Intenta de nuevo.')
+        setLoading(false)
+        return
+      }
+      existingTurn = data?.turn ?? null
+    } catch (e) {
+      console.error(e)
       setError('Error al buscar tu turno. Intenta de nuevo.')
       setLoading(false)
       return
     }
-
-    const existingTurn = data && Array.isArray(data) && data.length > 0 ? data[0] : null
 
     if (existingTurn && existingTurn.token) {
       if (searchMode === 'whatsapp') {

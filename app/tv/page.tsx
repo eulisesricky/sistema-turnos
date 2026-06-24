@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase';
 import { APP_VERSION } from '@/lib/version';
 
 interface Turn {
@@ -34,39 +33,34 @@ export default function TVPage() {
   }, []);
 
   const fetchTurns = async () => {
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from('turns')
-      .select('id, customer_name, turn_number, status, created_at')
-      .eq('business_id', process.env.NEXT_PUBLIC_BUSINESS_ID)
-      .in('status', ['waiting', 'called'])
-      .order('created_at', { ascending: true });
+    try {
+      const res = await fetch('/api/turns');
+      const data = await res.json();
+      if (!res.ok) {
+        console.error(data?.error ?? 'Error al cargar turnos');
+        return;
+      }
 
-    if (error) {
-      console.error(error.message);
-      return;
+      const list: Turn[] = Array.isArray(data) ? data : [];
+      const calledTurn = list.find((turn) => turn.status === 'called') ?? null;
+      const waitingTurns = list.filter((turn) => turn.status === 'waiting').slice(0, 6);
+
+      setCurrentTurn(calledTurn);
+      setNextTurns(waitingTurns);
+    } catch (e) {
+      console.error(e);
     }
-
-    const calledTurn = data?.find((turn) => turn.status === 'called') ?? null;
-    const waitingTurns = data?.filter((turn) => turn.status === 'waiting').slice(0, 6) ?? [];
-
-    setCurrentTurn(calledTurn);
-    setNextTurns(waitingTurns);
   };
 
   useEffect(() => {
     fetchTurns();
 
-    const supabase = createClient();
-    const channel = supabase
-      .channel('turns-channel')
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'turns' },
-        () => { fetchTurns(); }
-      )
-      .subscribe();
+    // Reemplazo del realtime de Supabase: sondeo cada 5 segundos.
+    const interval = setInterval(() => {
+      fetchTurns();
+    }, 5000);
 
-    return () => { supabase.removeChannel(channel); };
+    return () => clearInterval(interval);
   }, []);
 
   return (

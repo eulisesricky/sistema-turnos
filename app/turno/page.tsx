@@ -2,7 +2,6 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { createClient } from '@/lib/supabase'
 import { APP_VERSION } from '@/lib/version'
 
 function TurnoContent() {
@@ -88,6 +87,9 @@ function TurnoContent() {
         setError(data.error)
       } else {
         const remaining = data.remainingSeconds || 0
+        // Detectar aumento del estimado (demora) antes de sobrescribir la referencia
+        const prevEstimated = prevEstimatedRef.current
+        const wasIncrease = prevEstimated > 0 && data.estimated_wait_minutes > prevEstimated
         prevEstimatedRef.current = data.estimated_wait_minutes
         if (remaining > 0 && !reachedZeroRef.current) alertPlayedRef.current = false
 
@@ -104,10 +106,22 @@ function TurnoContent() {
         }
         if (data.status === 'called') {
           setCalledByStaff(true)
+          setDelayNotice(false)
           lockZero()
+          // Alerta de "te están llamando" (antes estaba en el canal realtime)
+          if (!alertPlayedRef.current) {
+            alertPlayedRef.current = true
+            playAlert()
+            sendNotification(
+              '📣 ¡Te están llamando!',
+              'El cajero te espera — acércate al mostrador.',
+              'staff-call'
+            )
+          }
         } else if (data.status === 'completed' || data.status === 'cancelled') {
           lockZero()
         } else if (!reachedZeroRef.current) {
+          if (wasIncrease) setDelayNotice(true)
           expiryTimeRef.current = Date.now() + remaining * 1000
           setTimeLeft(remaining)
         }
@@ -171,70 +185,14 @@ function TurnoContent() {
     }
   }, [token, fetchData])
 
-  // ── Realtime: recibe cambios del cajero al instante ────────────────────────
+  // ── Sondeo periódico: reemplazo del canal realtime de Supabase ─────────────
+  // Cada 5 s se vuelve a consultar /api/turno; fetchData ya dispara las alertas
+  // de "te están llamando" y de demora, y actualiza tiempo/cola.
   useEffect(() => {
-    if (!turno?.id || !token) return
-    let supabase: ReturnType<typeof createClient>
-    try { supabase = createClient() } catch { return }
-
-    const channel = supabase
-      .channel(`turn-${token}`)
-      .on('postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'turns' },
-        (payload: any) => {
-          const updated = payload.new
-          if (updated.token !== token) {
-            if (displayModeRef.current === 'queue') fetchData()
-            return
-          }
-
-          const elapsed          = (Date.now() - new Date(updated.created_at).getTime()) / 1000
-          const naturalRemaining = Math.max(0, updated.estimated_wait_minutes * 60 - elapsed)
-          const wasDecrease      = prevEstimatedRef.current > 0 && updated.estimated_wait_minutes < prevEstimatedRef.current
-          const wasIncrease      = prevEstimatedRef.current > 0 && updated.estimated_wait_minutes > prevEstimatedRef.current
-
-          const rtLockZero = () => {
-            reachedZeroRef.current = true
-            if (token) localStorage.setItem(`turno_zero_${token}`, '1')
-            expiryTimeRef.current = 0
-            setTimeLeft(0)
-          }
-
-          if (updated.status === 'called') {
-            setCalledByStaff(true)
-            setDelayNotice(false)
-            rtLockZero()
-            if (!alertPlayedRef.current) {
-              alertPlayedRef.current = true
-              playAlert()
-              // Notificación nativa: llega aunque la pantalla esté bloqueada
-              sendNotification(
-                '📣 ¡Te están llamando!',
-                'El cajero te espera — acércate al mostrador.',
-                'staff-call'
-              )
-            }
-            prevEstimatedRef.current = updated.estimated_wait_minutes
-            setTurno((prev: any) => ({ ...prev, ...updated, remainingSeconds: 0 }))
-          } else if (updated.status === 'waiting') {
-            if (wasIncrease) setDelayNotice(true)
-            prevEstimatedRef.current = updated.estimated_wait_minutes
-            if (wasDecrease && !reachedZeroRef.current) { fetchData(); return }
-            if (!reachedZeroRef.current) {
-              expiryTimeRef.current = Date.now() + naturalRemaining * 1000
-              setTimeLeft(Math.ceil(naturalRemaining))
-            }
-            setTurno((prev: any) => ({ ...prev, ...updated, remainingSeconds: naturalRemaining }))
-          } else {
-            rtLockZero()
-            prevEstimatedRef.current = updated.estimated_wait_minutes
-            setTurno((prev: any) => ({ ...prev, ...updated }))
-          }
-        })
-      .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
-  }, [turno?.id, token])
+    if (!token) return
+    const interval = setInterval(() => { fetchData() }, 5000)
+    return () => clearInterval(interval)
+  }, [token, fetchData])
 
   // ── Temporizador basado en timestamp absoluto ───────────────────────────────
   useEffect(() => {
