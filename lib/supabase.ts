@@ -2,7 +2,10 @@ import { createClient as supabaseCreateClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
+// La clave de servicio en .env.local es SUPABASE_SECRET_KEY; se acepta también
+// SUPABASE_SERVICE_ROLE_KEY como alias por compatibilidad.
+const supabaseServiceKey =
+  process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
 // Cliente público (para uso en frontend)
 export const supabase = supabaseUrl && supabaseAnonKey
@@ -14,8 +17,8 @@ export const supabaseAdmin = supabaseUrl && supabaseServiceKey
   ? supabaseCreateClient(supabaseUrl, supabaseServiceKey, {
       auth: {
         autoRefreshToken: false,
-        persistSession: false
-      }
+        persistSession: false,
+      },
     })
   : null;
 
@@ -26,30 +29,18 @@ export function createClient() {
   return supabaseCreateClient(supabaseUrl, supabaseAnonKey);
 }
 
-// Para usar en API routes del backend
-export function createAdminClient() {
-  if (!supabaseUrl || !supabaseServiceKey) {
-    throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY');
-  }
-  return supabaseCreateClient(supabaseUrl, supabaseServiceKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  });
-}
-
-const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY ?? '';
-
 // Cliente con clave de servicio (solo servidor). Bypassa RLS — usar únicamente
 // dentro de API routes, nunca en componentes de cliente.
 export function createAdminClient() {
-  if (!supabaseUrl || !supabaseSecretKey) {
+  if (!supabaseUrl || !supabaseServiceKey) {
     throw new Error(
       'Missing Supabase environment variables: NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SECRET_KEY'
     );
   }
-  return supabaseCreateClient(supabaseUrl, supabaseSecretKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
+  return supabaseCreateClient(supabaseUrl, supabaseServiceKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
   });
 }
